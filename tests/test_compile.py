@@ -168,3 +168,34 @@ def test_compile_quotes_sheet_names_in_query_a1_range() -> None:
     formula = book.write_report("report", expr)
     assert formula.startswith("=QUERY('raw data'!A:Z, ")
     assert "SUBSTITUTE('Bob''s sheet'!C2, \"'\", \"''\")" in formula
+
+
+def test_query_expr_is_immutable_when_reused() -> None:
+    base = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"])
+
+    q1 = base.where(q.col("country") == "JP")
+    q2 = base.where(q.col("country") == "US")
+
+    assert len(base.predicates) == 0
+    assert len(q1.predicates) == 1
+    assert len(q2.predicates) == 1
+    assert q1.predicates[0].right == "JP"
+    assert q2.predicates[0].right == "US"
+
+
+def test_limit_negative_raises_value_error() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    with pytest.raises(ValueError):
+        expr.limit(-1)
+
+
+def test_orderby_asc_is_supported() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.asc("country")])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report_sales", expr)
+    assert "order by A asc" in formula

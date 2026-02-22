@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
 
@@ -32,34 +32,81 @@ class Predicate:
     right: object
 
 
-@dataclass
+@dataclass(frozen=True)
 class QueryExpr:
     data_sheet: str
-    config_sheet: str
+    config_sheet: str | None
     range_: str
     header_rows: int
-    selected: list[object] = field(default_factory=list)
-    predicates: list[Predicate] = field(default_factory=list)
-    group_keys: list[str] = field(default_factory=list)
-    order: list[Order] = field(default_factory=list)
+    selected: tuple[object, ...] = ()
+    predicates: tuple[Predicate, ...] = ()
+    group_keys: tuple[str, ...] = ()
+    order: tuple[Order, ...] = ()
     limit_n: int | None = None
 
     def select(self, items: Sequence[object]) -> "QueryExpr":
-        self.selected.extend(items)
-        return self
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=self.range_,
+            header_rows=self.header_rows,
+            selected=(*self.selected, *items),
+            predicates=self.predicates,
+            group_keys=self.group_keys,
+            order=self.order,
+            limit_n=self.limit_n,
+        )
 
     def where(self, predicate: Predicate) -> "QueryExpr":
-        self.predicates.append(predicate)
-        return self
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=self.range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=(*self.predicates, predicate),
+            group_keys=self.group_keys,
+            order=self.order,
+            limit_n=self.limit_n,
+        )
 
     def groupby(self, keys: Sequence[str]) -> "QueryExpr":
-        self.group_keys = list(keys)
-        return self
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=self.range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=self.predicates,
+            group_keys=tuple(keys),
+            order=self.order,
+            limit_n=self.limit_n,
+        )
 
     def orderby(self, items: Sequence[Order]) -> "QueryExpr":
-        self.order = list(items)
-        return self
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=self.range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=self.predicates,
+            group_keys=self.group_keys,
+            order=tuple(items),
+            limit_n=self.limit_n,
+        )
 
     def limit(self, n: int) -> "QueryExpr":
-        self.limit_n = n
-        return self
+        if n < 0:
+            raise ValueError("limit must be >= 0")
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=self.range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=self.predicates,
+            group_keys=self.group_keys,
+            order=self.order,
+            limit_n=n,
+        )

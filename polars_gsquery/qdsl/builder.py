@@ -32,7 +32,13 @@ class ColExpr:
 
 
 class QueryNamespace:
-    def from_sheet(self, data_sheet: str, config_sheet: str, header_rows: int, range_: str) -> QueryExpr:
+    def from_sheet(
+        self,
+        data_sheet: str,
+        config_sheet: str | None = None,
+        header_rows: int = 1,
+        range_: str = "A:Z",
+    ) -> QueryExpr:
         return QueryExpr(data_sheet=data_sheet, config_sheet=config_sheet, range_=range_, header_rows=header_rows)
 
     def col(self, name: str) -> ColExpr:
@@ -47,5 +53,9 @@ class QueryNamespace:
     def desc(self, name: str) -> Order:
         return Order(name=name, descending=True)
 
+    def asc(self, name: str) -> Order:
+        return Order(name=name, descending=False)
+
 
 q = QueryNamespace()
+
