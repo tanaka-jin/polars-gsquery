@@ -109,7 +109,6 @@ def _is_a1_column_ref(name: str) -> bool:
 
 
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
-def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]) -> str:
     if not dynamic:
         return quote_formula_string(query_text)
     pieces: list[str] = []
