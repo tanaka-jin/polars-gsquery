@@ -98,6 +98,7 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
     if name in header_map:
         return header_map[name]
     if _is_a1_column_ref(name):
+        return name
     if re.fullmatch(r"Col\d+", name):
         return name
     raise KeyError(f"Unknown order key in header map: {name}")
