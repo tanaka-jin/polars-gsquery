@@ -4,10 +4,7 @@ from collections import defaultdict
 
 
 class SheetsAPI:
-    """Tiny in-memory adapter for MVP and tests.
-
-    Real implementation can wrap googleapiclient while keeping this interface.
-    """
+    """Tiny in-memory adapter for MVP and tests."""
 
     def __init__(self) -> None:
         self._sheets: dict[str, dict[str, object]] = defaultdict(dict)
@@ -21,7 +18,13 @@ class SheetsAPI:
 
     def write_rows(self, sheet: str, start_cell: str, rows: list[list[object]]) -> None:
         self.ensure_sheet(sheet)
-        self._sheets[sheet][start_cell] = rows
+        self._sheets[sheet][f"ROWS:{start_cell}"] = rows
+
+    def read_rows(self, sheet: str, start_cell: str = "A1") -> list[list[object]]:
+        value = self._sheets.get(sheet, {}).get(f"ROWS:{start_cell}")
+        if not isinstance(value, list):
+            raise KeyError(f"Missing rows fixture for {sheet}!{start_cell}")
+        return value
 
     def read_header(self, sheet: str, range_: str, header_row: int) -> list[str]:
         key = f"HEADER:{range_}:{header_row}"
@@ -32,5 +35,8 @@ class SheetsAPI:
 
     def set_header_fixture(self, sheet: str, range_: str, header_row: int, headers: list[str]) -> None:
         self.ensure_sheet(sheet)
-        key = f"HEADER:{range_}:{header_row}"
-        self._sheets[sheet][key] = headers
+        self._sheets[sheet][f"HEADER:{range_}:{header_row}"] = headers
+
+    def set_rows_fixture(self, sheet: str, rows: list[list[object]], start_cell: str = "A1") -> None:
+        self.ensure_sheet(sheet)
+        self._sheets[sheet][f"ROWS:{start_cell}"] = rows

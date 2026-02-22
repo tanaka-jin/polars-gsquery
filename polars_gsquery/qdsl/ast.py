@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from polars_sheets_query.config import ConfigRef
-
 
 @dataclass(frozen=True)
 class Column:
@@ -36,7 +34,8 @@ class Predicate:
 
 @dataclass
 class QueryExpr:
-    source_sheet: str
+    data_sheet: str
+    config_sheet: str
     range_: str
     header_rows: int
     selected: list[object] = field(default_factory=list)
@@ -64,6 +63,3 @@ class QueryExpr:
     def limit(self, n: int) -> "QueryExpr":
         self.limit_n = n
         return self
-
-
-Literal = str | int | float | bool | ConfigRef
