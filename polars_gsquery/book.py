@@ -56,7 +56,7 @@ class SheetBook:
     def get_header_map(self, sheet: str, header_row: int, range_: str) -> dict[str, str]:
         assert self.api is not None
         headers = self.api.read_header(sheet, range_, header_row)
-        return {name: f"Col{i}" for i, name in enumerate(headers, start=1)}
+        return {name: _column_index_to_a1(i) for i, name in enumerate(headers, start=1)}
 
     def write_report(self, sheet: str, query_expr: QueryExpr, anchor_cell: str = "A1") -> str:
         assert self.api is not None
@@ -65,3 +65,15 @@ class SheetBook:
         compiled = compile_formula(query_expr, header_map=header_map, locale=self.locale)
         self.api.write_cell(sheet, anchor_cell, compiled.formula)
         return compiled.formula
+
+
+def _column_index_to_a1(index: int) -> str:
+    if index < 1:
+        raise ValueError("index must be >= 1")
+
+    out: list[str] = []
+    n = index
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        out.append(chr(ord("A") + rem))
+    return "".join(reversed(out))
