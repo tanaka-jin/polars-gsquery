@@ -26,9 +26,9 @@ def test_compile_formula_with_config_refs_ja_locale() -> None:
     )
 
     formula = book.write_report("report_sales", expr, "A1")
-    assert formula.startswith("=QUERY(data!A:Z; ")
-    assert 'SUBSTITUTE(config!C2; "\'"; "\'\'")' in formula
-    assert 'TEXT(config!C3; "yyyy-MM-dd")' in formula
+    assert formula.startswith("=QUERY(data!A:Z, ")
+    assert 'SUBSTITUTE(config!C2, "\'", "\'\'")' in formula
+    assert 'TEXT(config!C3, "yyyy-MM-dd")' in formula
 
 
 def test_compile_formula_with_config_date_ref_en_locale_uses_text_format() -> None:
@@ -63,6 +63,21 @@ def test_locale_en_uses_comma_separator() -> None:
     formula = book.write_report("report_sales", expr)
     assert formula.startswith("=QUERY(data!A:Z, ")
 
+
+
+
+def test_locale_de_uses_semicolon_separator() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = (
+        q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
+        .select(["country", q.sum("sales")])
+        .groupby(["country"])
+    )
+
+    book = SheetBook("dummy", locale="de_DE", api=api)
+    formula = book.write_report("report_sales", expr)
+    assert formula.startswith("=QUERY(data!A:Z; ")
 
 def test_compiled_query_uses_multiline_and_label_clause() -> None:
     api = SheetsAPI()
