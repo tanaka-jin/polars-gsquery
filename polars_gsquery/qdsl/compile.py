@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
@@ -97,6 +98,7 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
     if name in header_map:
         return header_map[name]
     if _is_a1_column_ref(name):
+    if re.fullmatch(r"Col\d+", name):
         return name
     raise KeyError(f"Unknown order key in header map: {name}")
 
@@ -106,6 +108,7 @@ def _is_a1_column_ref(name: str) -> bool:
 
 
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
+def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]) -> str:
     if not dynamic:
         return quote_formula_string(query_text)
     pieces: list[str] = []
