@@ -61,3 +61,24 @@ print(formula)
 
 - `config` の string 値に `'` が入る場合のエスケープは未対応
 - `data` の列順が変わると `ColN` 対応が崩れる可能性がある
+
+## 次にやりたいこと / 今後の拡張
+
+- 複数レポートの一括生成
+  - `write_reports({"report_sales": expr1, "report_users": expr2})` のようなAPIを追加し、複数QUERYをまとめて反映できるようにする
+- Configの入力安全性向上
+  - string値中のシングルクォートを `SUBSTITUTE(..., "'", "''")` で自動エスケープ
+  - 型不整合（date形式不正など）のバリデーションを強化
+- localeの取り扱い改善
+  - `locale` 明示指定に加えて、シート設定からの自動検出を検討
+- Query DSLの拡張
+  - `in_`, `is_null`, `is_not_null`, `avg/min/max`, OR条件などを段階的に追加
+- Colab利用の実運用強化
+  - Google認証（`google.colab.auth` + gspread/googleapiclient）を使った実APIアダプタを追加
+  - 「初回セットアップ→以降はconfig編集のみ」の運用手順をノートブック例として整備
+- ヘッダ/列順変更への耐性向上
+  - ヘッダ変更検出時の明確なエラー
+  - 列名ベースの再マッピング補助（差分ログ出力など）
+- テスト拡充
+  - 期待QUERY文字列のスナップショットテスト
+  - locale別・型別のコンパイル網羅テスト
