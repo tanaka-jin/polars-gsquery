@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+from typing import Sequence
 
 from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
@@ -49,7 +50,7 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
 
 
 def _compile_select(
-    items: list[object],
+    items: Sequence[object],
     header_map: dict[str, str],
     labels: list[tuple[str, str]],
     aliases: dict[str, str],
@@ -87,7 +88,7 @@ def _compile_predicate(pred: Predicate, header_map: dict[str, str], dynamic: lis
     return f"{left} {pred.op} {right}"
 
 
-def _compile_order(orders: list[Order], header_map: dict[str, str], aliases: dict[str, str]) -> str:
+def _compile_order(orders: Sequence[Order], header_map: dict[str, str], aliases: dict[str, str]) -> str:
     out: list[str] = []
     for item in orders:
         col = _resolve_order_target(item.name, header_map, aliases)
