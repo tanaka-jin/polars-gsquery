@@ -214,3 +214,88 @@ def test_orderby_asc_is_supported() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
     assert "order by A asc" in formula
+
+
+def test_select_omitted_defaults_to_star() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report_sales", expr)
+    assert '"select *"' in formula
+
+
+def test_select_empty_list_defaults_to_star() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select([])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report_sales", expr)
+    assert '"select *"' in formula
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1, "where A = 1"),
+        (1.5, "where A = 1.5"),
+        (True, "where A = TRUE"),
+        (False, "where A = FALSE"),
+    ],
+)
+def test_where_numeric_and_bool_literals_are_compiled(value: object, expected: str) -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["value"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(q.col("value") == value)
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert expected in formula
+
+
+def test_orderby_coln_reference_is_supported() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc("Col2")])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "order by Col2 desc" in formula
+
+
+def test_orderby_prefers_alias_over_header_name() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["sales_sum", "sales"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .select(["sales_sum", q.sum("sales").alias("sales_sum")])
+        .orderby([q.desc("sales_sum")])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "order by sum(B) desc" in formula
+
+
+def test_unknown_select_column_raises_keyerror_with_context() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["missing_col"])
+    book = SheetBook("dummy", locale="en_US", api=api)
+
+    with pytest.raises(KeyError, match="Unknown column in header map"):
+        book.write_report("report", expr)
+
+
+def test_unknown_config_reference_raises_keyerror_with_context() -> None:
+    cfg = Config(sheet="config")
+    cfg.load_rows([["key", "type", "value"], ["country", "string", "JP"]])
+
+    with pytest.raises(KeyError, match="Unknown config key"):
+        cfg.ref("missing")

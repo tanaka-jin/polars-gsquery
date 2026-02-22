@@ -83,7 +83,8 @@ print(formula)
 
 - `SheetBook.write_mart(df, sheet="data")`
   - ヘッダ + データを書き込み
-  - 行の列数が不一致（ragged rows）の場合はエラー
+  - 行の列数が不一致（ragged rows）の場合は書き込み前にエラー
+  - `iter_rows()` が generator でも利用可能
 - `SheetBook.load_config(cfg)`
   - `Config` にスプレッドシート上の設定値マップをロード
 - `SheetBook.write_report(sheet, query_expr, anchor_cell="A1")`
@@ -95,6 +96,7 @@ print(formula)
 - 現在の集計関数は `sum`, `count` のみ
 - 条件は `and` 連結のみ（`or` は未対応）
 - `where` は `q.col("...") <op> 値` 形式（`in`, `is null` などは未対応）
+- `select(...)` を省略、または空で指定した場合は `select *` として扱います
 
 ## 開発
 

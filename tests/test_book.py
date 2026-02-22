@@ -65,3 +65,63 @@ def test_write_mart_rejects_ragged_rows() -> None:
 
     with pytest.raises(ValueError, match="ragged rows"):
         book.write_mart(RaggedDF(), sheet="data")
+
+
+def test_write_mart_accepts_generator_iter_rows() -> None:
+    class GeneratorDF:
+        columns = ["a", "b"]
+
+        def iter_rows(self):
+            yield (1, 2)
+            yield (3, 4)
+
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    book.write_mart(GeneratorDF(), sheet="data")
+    assert api.read_rows("data") == [["a", "b"], [1, 2], [3, 4]]
+
+
+def test_write_mart_empty_rows_with_columns_writes_header_only() -> None:
+    class EmptyRowsDF:
+        columns = ["a", "b"]
+
+        def iter_rows(self):
+            return iter(())
+
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    book.write_mart(EmptyRowsDF(), sheet="data")
+    assert api.read_rows("data") == [["a", "b"]]
+
+
+def test_write_mart_empty_columns_and_rows_is_allowed() -> None:
+    class EmptyDF:
+        columns = []
+
+        def iter_rows(self):
+            return iter(())
+
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    book.write_mart(EmptyDF(), sheet="data")
+    assert api.read_rows("data") == [[]]
+
+
+def test_write_mart_ragged_rows_do_not_write_partial_data() -> None:
+    class RaggedDF:
+        columns = ["a", "b"]
+
+        def iter_rows(self):
+            return [(1, 2), (3,)]
+
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    with pytest.raises(ValueError, match="ragged rows"):
+        book.write_mart(RaggedDF(), sheet="data")
+
+    with pytest.raises(KeyError):
+        api.read_rows("data")
