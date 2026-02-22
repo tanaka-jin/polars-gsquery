@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable, Protocol
 
 from .config import Config
 from .qdsl.ast import QueryExpr
 from .qdsl.compile import compile_formula
 from .sheets.api import GoogleSheetsAPI, SheetsAPI, SupportsSheetsAPI
+
+
+class SupportsDataFrame(Protocol):
+    columns: list[str]
+
+    def iter_rows(self) -> Iterable[tuple[object, ...]]: ...
 
 
 @dataclass
@@ -40,31 +47,39 @@ class SheetBook:
         return cls(spreadsheet_id=spreadsheet_id, creds=creds, locale=locale, api=api)
 
     def load_config(self, cfg: Config, start_cell: str = "A1") -> None:
-        assert self.api is not None
-        rows = self.api.read_rows(cfg.sheet, start_cell=start_cell)
+        rows = self._require_api().read_rows(cfg.sheet, start_cell=start_cell)
         cfg.load_rows(rows)
 
-    def write_mart(self, df: object, sheet: str = "data", start_cell: str = "A1") -> None:
+    def write_mart(self, df: SupportsDataFrame, sheet: str = "data", start_cell: str = "A1") -> None:
         """Write a single polars.DataFrame to Sheet as mart/data source."""
-        assert self.api is not None
-        columns = list(getattr(df, "columns"))
-        values = [list(r) for r in df.iter_rows()]
-        self.api.write_rows(sheet, start_cell, [columns, *values])
-        if isinstance(self.api, SheetsAPI):
-            self.api.set_header_fixture(sheet, "A:Z", 1, columns)
+        api = self._require_api()
+        rows = _rows_from_frame(df)
+        api.write_rows(sheet, start_cell, rows)
+        if isinstance(api, SheetsAPI):
+            api.set_header_fixture(sheet, "A:Z", 1, rows[0])
 
     def get_header_map(self, sheet: str, header_row: int, range_: str) -> dict[str, str]:
-        assert self.api is not None
-        headers = self.api.read_header(sheet, range_, header_row)
+        headers = self._require_api().read_header(sheet, range_, header_row)
         return {name: _column_index_to_a1(i) for i, name in enumerate(headers, start=1)}
 
     def write_report(self, sheet: str, query_expr: QueryExpr, anchor_cell: str = "A1") -> str:
-        assert self.api is not None
-        self.api.ensure_sheet(sheet)
+        api = self._require_api()
+        api.ensure_sheet(sheet)
         header_map = self.get_header_map(query_expr.data_sheet, query_expr.header_rows, query_expr.range_)
         compiled = compile_formula(query_expr, header_map=header_map, locale=self.locale)
-        self.api.write_cell(sheet, anchor_cell, compiled.formula)
+        api.write_cell(sheet, anchor_cell, compiled.formula)
         return compiled.formula
+
+    def _require_api(self) -> SupportsSheetsAPI:
+        if self.api is None:
+            raise RuntimeError("Sheets API is not initialized")
+        return self.api
+
+
+def _rows_from_frame(df: SupportsDataFrame) -> list[list[object]]:
+    columns = [str(c) for c in df.columns]
+    values = [list(row) for row in df.iter_rows()]
+    return [columns, *values]
 
 
 def _column_index_to_a1(index: int) -> str:
