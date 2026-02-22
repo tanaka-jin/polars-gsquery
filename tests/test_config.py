@@ -26,3 +26,21 @@ def test_config_ref_quotes_sheet_name_for_a1() -> None:
     cfg.load_rows([["key", "type", "value"], ["country", "string", "O'Reilly"]])
     ref = cfg.ref("country")
     assert ref.a1_ref == "'Bob''s sheet'!C2"
+
+
+def test_config_uses_key_and_type_columns() -> None:
+    cfg = Config(key_col="B", type_col="D", value_col="E")
+    cfg.load_rows([
+        ["ignored", "key", "ignored", "type", "value"],
+        ["x", "min_users", "x", "number", 100],
+    ])
+
+    ref = cfg.ref("min_users")
+    assert ref.type_name == "number"
+    assert ref.a1_ref == "config!E2"
+
+
+def test_config_rejects_invalid_column_label() -> None:
+    cfg = Config(key_col="1")
+    with pytest.raises(ValueError, match="Invalid column label"):
+        cfg.load_rows([["key", "type", "value"]])
