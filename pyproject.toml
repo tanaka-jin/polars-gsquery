@@ -8,6 +8,16 @@ version = "0.2.0"
 description = "Build Google Sheets QUERY formulas from a Polars-friendly DSL"
 requires-python = ">=3.10"
 
+
+dependencies = []
+
+[project.optional-dependencies]
+colab = [
+  "gspread>=6.0.0",
+  "google-api-python-client>=2.0.0",
+  "google-auth>=2.0.0",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
