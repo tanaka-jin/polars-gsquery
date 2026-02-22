@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .config import Config
 from .qdsl.ast import QueryExpr
 from .qdsl.compile import compile_formula
-from .sheets.api import SheetsAPI
+from .sheets.api import GoogleSheetsAPI, SheetsAPI, SupportsSheetsAPI
 
 
 @dataclass
@@ -13,7 +13,7 @@ class SheetBook:
     spreadsheet_id: str
     creds: object | None = None
     locale: str = "en_US"
-    api: SheetsAPI | None = None
+    api: SupportsSheetsAPI | None = None
 
     def __post_init__(self) -> None:
         if self.api is None:
@@ -21,12 +21,23 @@ class SheetBook:
 
     @classmethod
     def from_colab(cls, spreadsheet_id: str, locale: str = "ja_JP") -> "SheetBook":
-        """Colab-first constructor.
+        """Colab-first constructor with Google auth + Sheets clients."""
+        from google.auth import default
+        from google.colab import auth
+        from googleapiclient.discovery import build
+        import gspread
 
-        In production this should initialize Google auth/token clients,
-        but MVP keeps API injectable and testable.
-        """
-        return cls(spreadsheet_id=spreadsheet_id, locale=locale)
+        auth.authenticate_user()
+        creds, _ = default(scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        gspread_client = gspread.authorize(creds)
+        values_service = build("sheets", "v4", credentials=creds).spreadsheets().values()
+
+        api = GoogleSheetsAPI(
+            spreadsheet_id=spreadsheet_id,
+            gspread_client=gspread_client,
+            values_service=values_service,
+        )
+        return cls(spreadsheet_id=spreadsheet_id, creds=creds, locale=locale, api=api)
 
     def load_config(self, cfg: Config, start_cell: str = "A1") -> None:
         assert self.api is not None
@@ -39,7 +50,8 @@ class SheetBook:
         columns = list(getattr(df, "columns"))
         values = [list(r) for r in df.iter_rows()]
         self.api.write_rows(sheet, start_cell, [columns, *values])
-        self.api.set_header_fixture(sheet, "A:Z", 1, columns)
+        if isinstance(self.api, SheetsAPI):
+            self.api.set_header_fixture(sheet, "A:Z", 1, columns)
 
     def get_header_map(self, sheet: str, header_row: int, range_: str) -> dict[str, str]:
         assert self.api is not None
