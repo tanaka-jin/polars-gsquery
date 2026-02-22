@@ -8,7 +8,7 @@ from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
-from .ast import Agg, Order, Predicate, QueryExpr
+from .ast import Agg, Order, Predicate, QueryExpr, RawPredicate
 
 
 @dataclass
@@ -23,7 +23,7 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
     return CompiledQuery(
         formula=(
-            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})"
+            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{_resolve_range(expr, header_map)}{delim} {query_expr}{delim} {expr.header_rows})"
         ),
         query_text=query_text,
     )
@@ -78,7 +78,10 @@ def _compile_select(
     return ", ".join(compiled)
 
 
-def _compile_predicate(pred: Predicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]) -> str:
+def _compile_predicate(pred: Predicate | RawPredicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]) -> str:
+    if isinstance(pred, RawPredicate):
+        return pred.query
+
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right
     if isinstance(right, ConfigRef):
@@ -142,6 +145,26 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
         return f'IF({cfg_ref.a1_ref}{delim} "TRUE"{delim} "FALSE")'
     return cfg_ref.a1_ref
 
+
+
+def _resolve_range(expr: QueryExpr, header_map: dict[str, str]) -> str:
+    if expr.range_ is not None:
+        return expr.range_
+    if not header_map:
+        raise ValueError("Cannot infer range from empty header")
+    return f"A:{_a1_col_from_count(len(header_map))}"
+
+
+def _a1_col_from_count(count: int) -> str:
+    if count < 1:
+        raise ValueError("count must be >= 1")
+
+    out: list[str] = []
+    n = count
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        out.append(chr(ord("A") + rem))
+    return "".join(reversed(out))
 
 def _quote_query_string(value: str) -> str:
     return value.replace("'", "''")

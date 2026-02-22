@@ -33,13 +33,18 @@ class Predicate:
 
 
 @dataclass(frozen=True)
+class RawPredicate:
+    query: str
+
+
+@dataclass(frozen=True)
 class QueryExpr:
     data_sheet: str
     config_sheet: str | None
-    range_: str
+    range_: str | None
     header_rows: int
     selected: tuple[object, ...] = ()
-    predicates: tuple[Predicate, ...] = ()
+    predicates: tuple[Predicate | RawPredicate, ...] = ()
     group_keys: tuple[str, ...] = ()
     order: tuple[Order, ...] = ()
     limit_n: int | None = None
@@ -57,14 +62,19 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def where(self, predicate: Predicate) -> "QueryExpr":
+    def where(self, predicate: Predicate | str | RawPredicate) -> "QueryExpr":
+        normalized: Predicate | RawPredicate
+        if isinstance(predicate, str):
+            normalized = RawPredicate(predicate)
+        else:
+            normalized = predicate
         return QueryExpr(
             data_sheet=self.data_sheet,
             config_sheet=self.config_sheet,
             range_=self.range_,
             header_rows=self.header_rows,
             selected=self.selected,
-            predicates=(*self.predicates, predicate),
+            predicates=(*self.predicates, normalized),
             group_keys=self.group_keys,
             order=self.order,
             limit_n=self.limit_n,
@@ -109,4 +119,17 @@ class QueryExpr:
             group_keys=self.group_keys,
             order=self.order,
             limit_n=n,
+        )
+
+    def with_range(self, range_: str) -> "QueryExpr":
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=self.predicates,
+            group_keys=self.group_keys,
+            order=self.order,
+            limit_n=self.limit_n,
         )

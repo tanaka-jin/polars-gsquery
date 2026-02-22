@@ -299,3 +299,27 @@ def test_unknown_config_reference_raises_keyerror_with_context() -> None:
 
     with pytest.raises(KeyError, match="Unknown config key"):
         cfg.ref("missing")
+
+
+def test_where_accepts_raw_query_string() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where("B > 100")
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where B > 100" in formula
+
+
+def test_clause_order_is_independent_from_call_order() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .where(q.col("sales") > 100)
+        .select(["country"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select A\nwhere B > 100"' in formula

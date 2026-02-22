@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Protocol
 
-from .config import Config
-from .qdsl.ast import QueryExpr
+from .config import Config, ConfigRef
+from .qdsl.ast import Predicate, QueryExpr, RawPredicate
 from .qdsl.compile import compile_formula
 from .sheets.api import GoogleSheetsAPI, SheetsAPI, SupportsSheetsAPI
 
@@ -20,6 +20,7 @@ class SheetBook:
     spreadsheet_id: str
     creds: object | None = None
     locale: str = "en_US"
+    config_sheet: str = "config"
     api: SupportsSheetsAPI | None = None
 
     def __post_init__(self) -> None:
@@ -46,9 +47,19 @@ class SheetBook:
         )
         return cls(spreadsheet_id=spreadsheet_id, creds=creds, locale=locale, api=api)
 
-    def load_config(self, cfg: Config, start_cell: str = "A1") -> None:
-        rows = self._require_api().read_rows(cfg.sheet, start_cell=start_cell)
-        cfg.load_rows(rows)
+    def load_config(self, cfg: Config | None = None, start_cell: str = "A1") -> Config:
+        target = cfg if cfg is not None else Config(sheet=self.config_sheet)
+        rows = self._require_api().read_rows(target.sheet, start_cell=start_cell)
+        target.load_rows(rows)
+        return target
+
+    def ensure_config_loaded(self, expr: QueryExpr, start_cell: str = "A1") -> QueryExpr:
+        if expr.config_sheet is None or not _has_deferred_config_refs(expr):
+            return expr
+
+        cfg = Config(sheet=expr.config_sheet)
+        self.load_config(cfg, start_cell=start_cell)
+        return _bind_config_refs(expr, cfg)
 
     def write_mart(self, df: SupportsDataFrame, sheet: str = "data", start_cell: str = "A1") -> None:
         """Write a single polars.DataFrame to Sheet as mart/data source."""
@@ -86,8 +97,15 @@ class SheetBook:
     def write_report(self, sheet: str, query_expr: QueryExpr, anchor_cell: str = "A1") -> str:
         api = self._require_api()
         api.ensure_sheet(sheet)
-        header_map = self.get_header_map(query_expr.data_sheet, query_expr.header_rows, query_expr.range_)
-        compiled = compile_formula(query_expr, header_map=header_map, locale=self.locale)
+
+        resolved_expr = self.ensure_config_loaded(query_expr)
+        header_range = resolved_expr.range_ if resolved_expr.range_ is not None else "A:Z"
+        header_map = self.get_header_map(resolved_expr.data_sheet, resolved_expr.header_rows, header_range)
+
+        if resolved_expr.range_ is None:
+            resolved_expr = resolved_expr.with_range(f"A:{_column_index_to_a1(len(header_map))}")
+
+        compiled = compile_formula(resolved_expr, header_map=header_map, locale=self.locale)
         api.write_cell(sheet, anchor_cell, compiled.formula)
         return compiled.formula
 
@@ -125,3 +143,41 @@ def _validate_rectangular_rows(rows: list[list[object]]) -> None:
             raise ValueError(
                 f"write_mart wrote ragged rows: row {i} has {len(row)} columns but header has {header_width}"
             )
+
+
+def _has_deferred_config_refs(expr: QueryExpr) -> bool:
+    for predicate in expr.predicates:
+        if isinstance(predicate, Predicate) and _is_deferred_config_ref(predicate.right):
+            return True
+    return False
+
+
+def _is_deferred_config_ref(value: object) -> bool:
+    return isinstance(value, ConfigRef) and value.a1_ref.startswith("__CONFIG_KEY__:")
+
+
+def _bind_config_refs(expr: QueryExpr, cfg: Config) -> QueryExpr:
+    return QueryExpr(
+        data_sheet=expr.data_sheet,
+        config_sheet=expr.config_sheet,
+        range_=expr.range_,
+        header_rows=expr.header_rows,
+        selected=expr.selected,
+        predicates=tuple(_bind_predicate_config_ref(p, cfg) for p in expr.predicates),
+        group_keys=expr.group_keys,
+        order=expr.order,
+        limit_n=expr.limit_n,
+    )
+
+
+def _bind_predicate_config_ref(predicate: Predicate | RawPredicate, cfg: Config) -> Predicate | RawPredicate:
+    if isinstance(predicate, RawPredicate):
+        return predicate
+
+    if _is_deferred_config_ref(predicate.right):
+        right = predicate.right
+        assert isinstance(right, ConfigRef)
+        key = right.a1_ref.removeprefix("__CONFIG_KEY__:")
+        return Predicate(left=predicate.left, op=predicate.op, right=cfg.ref(key))
+
+    return predicate

@@ -1,6 +1,6 @@
 import pytest
 
-from polars_gsquery import SheetBook
+from polars_gsquery import SheetBook, q
 from polars_gsquery.sheets.api import SheetsAPI
 
 
@@ -125,3 +125,35 @@ def test_write_mart_ragged_rows_do_not_write_partial_data() -> None:
 
     with pytest.raises(KeyError):
         api.read_rows("data")
+
+
+def test_write_report_auto_loads_config_when_config_sheet_is_set() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country"])
+    api.write_rows("params", "A1", [["key", "type", "value"], ["country", "string", "JP"]])
+
+    book = SheetBook("dummy", api=api)
+    expr = q.from_sheet(data_sheet="data", config_sheet="params").where(q.col("country") == q.cfg("country"))
+
+    formula = book.write_report("report", expr)
+    assert "SUBSTITUTE(params!C2" in formula
+
+
+def test_write_report_uses_default_config_sheet_for_load_config() -> None:
+    api = SheetsAPI()
+    api.write_rows("params", "A1", [["key", "type", "value"], ["country", "string", "JP"]])
+    book = SheetBook("dummy", api=api, config_sheet="params")
+
+    cfg = book.load_config()
+    assert cfg.ref("country").a1_ref == "params!C2"
+
+
+def test_write_report_infers_range_from_header_when_not_specified() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    expr = q.from_sheet(data_sheet="data").select(["country"])
+
+    formula = book.write_report("report", expr)
+    assert "=QUERY(data!A:B," in formula
