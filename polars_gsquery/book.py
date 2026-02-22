@@ -55,12 +55,37 @@ class SheetBook:
         api = self._require_api()
         rows = _rows_from_frame(df)
         api.write_rows(sheet, start_cell, rows)
+
+        if not rows:
+            raise ValueError("write_mart produced no rows")
+        header_width = len(rows[0])
+        for i, row in enumerate(rows, start=1):
+            if len(row) != header_width:
+                raise ValueError(
+                    f"write_mart wrote ragged rows: row {i} has {len(row)} columns but header has {header_width}"
+                )
+
         if isinstance(api, SheetsAPI):
             api.set_header_fixture(sheet, "A:Z", 1, rows[0])
 
     def get_header_map(self, sheet: str, header_row: int, range_: str) -> dict[str, str]:
-        headers = self._require_api().read_header(sheet, range_, header_row)
-        return {name: _column_index_to_a1(i) for i, name in enumerate(headers, start=1)}
+        try:
+            headers = self._require_api().read_header(sheet, range_, header_row)
+        except KeyError as exc:
+            raise ValueError(f"Failed to read header row: {sheet}!{range_} row={header_row}") from exc
+
+        if not headers:
+            raise ValueError(f"Header row is empty or missing: {sheet}!{range_} row={header_row}")
+
+        header_map: dict[str, str] = {}
+        for i, raw_name in enumerate(headers, start=1):
+            name = str(raw_name).strip()
+            if not name:
+                raise ValueError(f"Header contains an empty column name at {sheet}!{_column_index_to_a1(i)}{header_row}")
+            if name in header_map:
+                raise ValueError(f"Header contains duplicate column name: {name!r} at {sheet}!{_column_index_to_a1(i)}{header_row}")
+            header_map[name] = _column_index_to_a1(i)
+        return header_map
 
     def write_report(self, sheet: str, query_expr: QueryExpr, anchor_cell: str = "A1") -> str:
         api = self._require_api()

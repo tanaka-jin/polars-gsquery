@@ -1,3 +1,5 @@
+import pytest
+
 from polars_gsquery import SheetBook
 from polars_gsquery.sheets.api import SheetsAPI
 
@@ -23,3 +25,43 @@ def test_get_header_map_uses_a1_column_letters() -> None:
     book = SheetBook("dummy", api=api)
 
     assert book.get_header_map("data", 1, "A:Z") == {"a": "A", "b": "B", "z": "C", "aa": "D"}
+
+
+def test_get_header_map_rejects_empty_header_name() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", " "])
+    book = SheetBook("dummy", api=api)
+
+    with pytest.raises(ValueError, match="empty column name"):
+        book.get_header_map("data", 1, "A:Z")
+
+
+def test_get_header_map_rejects_duplicate_header_name() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "a"])
+    book = SheetBook("dummy", api=api)
+
+    with pytest.raises(ValueError, match="duplicate column name"):
+        book.get_header_map("data", 1, "A:Z")
+
+
+def test_get_header_map_errors_when_header_is_missing() -> None:
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    with pytest.raises(ValueError, match="Failed to read header row"):
+        book.get_header_map("data", 1, "A:Z")
+
+
+def test_write_mart_rejects_ragged_rows() -> None:
+    class RaggedDF:
+        columns = ["a", "b"]
+
+        def iter_rows(self):
+            return [(1,), (2, 3)]
+
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    with pytest.raises(ValueError, match="ragged rows"):
+        book.write_mart(RaggedDF(), sheet="data")
