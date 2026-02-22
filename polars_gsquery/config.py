@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from polars_gsquery.sheets.a1 import quote_sheet_name
+
 VALID_TYPES = {"string", "number", "date", "boolean"}
 
 
@@ -45,4 +47,8 @@ class Config:
         if key not in self._row_map:
             raise KeyError(f"Unknown config key: {key}")
         type_name, row_no = self._row_map[key]
-        return ConfigRef(key=key, type_name=type_name, a1_ref=f"{self.sheet}!{self.value_col}{row_no}")
+        return ConfigRef(
+            key=key,
+            type_name=type_name,
+            a1_ref=f"{quote_sheet_name(self.sheet)}!{self.value_col}{row_no}",
+        )
