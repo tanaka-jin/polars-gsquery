@@ -37,8 +37,8 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
         query_parts.append(f"label {label_sql}")
 
     query_text = "\n".join(query_parts)
-    query_expr = _inject_dynamic_tokens(query_text, dynamic)
     delim = function_arg_delimiter(locale)
+    query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
     return CompiledQuery(
         formula=f"=QUERY({expr.data_sheet}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})",
         query_text=query_text,
@@ -97,11 +97,17 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
         return aliases[name]
     if name in header_map:
         return header_map[name]
+    if _is_a1_column_ref(name):
     if re.fullmatch(r"Col\d+", name):
         return name
     raise KeyError(f"Unknown order key in header map: {name}")
 
 
+def _is_a1_column_ref(name: str) -> bool:
+    return bool(name) and name.isalpha() and name.isascii() and name.isupper()
+
+
+def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]) -> str:
     if not dynamic:
         return quote_formula_string(query_text)
@@ -112,20 +118,20 @@ def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]
         static = query_text[cursor:idx]
         if static:
             pieces.append(quote_formula_string(static))
-        pieces.append(_config_ref_expr(cfg_ref))
+        pieces.append(_config_ref_expr(cfg_ref, delim))
         cursor = idx + len(token)
     if query_text[cursor:]:
         pieces.append(quote_formula_string(query_text[cursor:]))
     return " & ".join(pieces)
 
 
-def _config_ref_expr(cfg_ref: ConfigRef) -> str:
+def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     if cfg_ref.type_name == "string":
         return f'"\'" & {cfg_ref.a1_ref} & "\'"'
     if cfg_ref.type_name == "date":
-        return f'"date \'" & {cfg_ref.a1_ref} & "\'"'
+        return f'"date \'" & TEXT({cfg_ref.a1_ref}{delim} "yyyy-MM-dd") & "\'"'
     if cfg_ref.type_name == "boolean":
-        return f'IF({cfg_ref.a1_ref}, "TRUE", "FALSE")'
+        return f'IF({cfg_ref.a1_ref}{delim} "TRUE"{delim} "FALSE")'
     return cfg_ref.a1_ref
 
 
