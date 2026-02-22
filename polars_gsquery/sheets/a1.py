@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 _SIMPLE_SHEET_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 

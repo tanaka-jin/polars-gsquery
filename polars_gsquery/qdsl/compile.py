@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Sequence
 
 from polars_gsquery.config import ConfigRef
@@ -135,7 +135,7 @@ def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]
 
 def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     if cfg_ref.type_name == "string":
-        return f"\"'\" & SUBSTITUTE({cfg_ref.a1_ref}{delim} \"'\"{delim} \"''\") & \"'\""
+        return f'"\'" & SUBSTITUTE({cfg_ref.a1_ref}{delim} "\'"{delim} "\'\'") & "\'"'
     if cfg_ref.type_name == "date":
         return f'"date \'" & TEXT({cfg_ref.a1_ref}{delim} "yyyy-MM-dd") & "\'"'
     if cfg_ref.type_name == "boolean":

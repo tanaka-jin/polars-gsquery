@@ -58,4 +58,3 @@ class QueryNamespace:
 
 
 q = QueryNamespace()
-

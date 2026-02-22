@@ -1,9 +1,31 @@
 from __future__ import annotations
 
-
 SEMICOLON_LANGS = {
-    "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hr", "hu", "it",
-    "lt", "lv", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk",
+    "bg",
+    "cs",
+    "da",
+    "de",
+    "el",
+    "es",
+    "et",
+    "fi",
+    "fr",
+    "hr",
+    "hu",
+    "it",
+    "lt",
+    "lv",
+    "nl",
+    "no",
+    "pl",
+    "pt",
+    "ro",
+    "ru",
+    "sk",
+    "sl",
+    "sv",
+    "tr",
+    "uk",
 }
 
 
