@@ -1,33 +1,46 @@
 # polars-gsquery
 
-Google Spreadsheet の `=QUERY(...)` を、PolarsライクなDSLから組み立てる最小ライブラリです。
+Google スプレッドシートの `=QUERY(...)` を、Polars ライクな DSL で安全に組み立てるライブラリです。
 
-## 事前に必要なスプレッドシート
+## できること
 
-- `config` シート（人が編集する）
-  - ヘッダ行: `key | type | value`
-  - `type`: `string | number | date | boolean`
-  - 例:
-    - `country | string | JP`
-    - `start_date | date | 2026-01-01`
-- `data` シート（単一の mart）
-  - Python側で `polars.DataFrame` をそのまま書き込む前提
-- `report_sales` シート（空でOK）
-  - `A1` に生成された `=QUERY(...)` が配置される
+- `q` DSL で `select / where / group by / order by / limit / label(alias)` を構築
+- スプレッドシートのヘッダ行から列名→A1 列記号（`A`, `B`, ...）を自動解決
+- `Config` シートの値参照（`string / number / date / boolean`）を動的に QUERY に埋め込み
+  - `string` は `SUBSTITUTE(..., "'", "''")` でクォートをエスケープ
+  - `date` は `TEXT(..., "yyyy-MM-dd")` で `date 'YYYY-MM-DD'` 形式へ変換
+  - `boolean` は `IF(..., "TRUE", "FALSE")` へ変換
+- 関数区切り文字はロケール依存（例: `ja_JP` / `en_US` は `,`、`de_DE` は `;`）
+- Colab 向けに `SheetBook.from_colab(...)` を提供（Google 認証 + Sheets クライアント初期化）
 
-## Colabで動かす最小Example
+## インストール
+
+```bash
+pip install polars-gsquery
+```
+
+`SheetBook.from_colab(...)` を使う場合は、`gspread` / `google-api-python-client` / `google-auth` が必要です。
+基本的には extras を使って以下でまとめて入れるのを推奨します。
+
+```bash
+pip install 'polars-gsquery[colab]'
+```
+
+すでにこれら依存を別で導入済みなら、`pip install polars-gsquery` だけでも動作します。
+
+## 最小例（Colab）
 
 ```python
-# pip install polars-gsquery polars
 import polars as pl
 from polars_gsquery import SheetBook, Config, q
 
 SPREADSHEET_ID = "your-spreadsheet-id"
 
-# Colab前提のコンストラクタ（MVPではAPI注入しやすい形）
 book = SheetBook.from_colab(spreadsheet_id=SPREADSHEET_ID, locale="ja_JP")
 
-# 1) 単一DataFrameをdataシートへ書き込み（mart）
+# 1) DataFrame を data シートへ書き込み
+#    columns と iter_rows() を持つオブジェクトなら利用できます
+#    （polars.DataFrame はそのまま利用可）
 df = pl.DataFrame(
     {
         "country": ["JP", "US", "JP"],
@@ -37,17 +50,18 @@ df = pl.DataFrame(
 )
 book.write_mart(df, sheet="data")
 
-# 2) configはスプシ上の既存値を読む（Pythonで初期値を配らない）
+# 2) config シートを読み込む
 cfg = Config(sheet="config")
 book.load_config(cfg)
 
-# 3) report用QUERY式を生成・配置
+# 3) QUERY 式を組み立てて report シートへ配置
 expr = (
     q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
     .select(["country", q.sum("sales").alias("sales_sum")])
     .where(q.col("country") == cfg.ref("country"))
     .where(q.col("event_date") >= cfg.ref("start_date"))
     .groupby(["country"])
+    .orderby([q.desc("sales_sum")])
     .limit(50)
 )
 
@@ -55,30 +69,36 @@ formula = book.write_report(sheet="report_sales", query_expr=expr, anchor_cell="
 print(formula)
 ```
 
-`config!C2` や `config!C3` を編集すると、`report_sales` の結果はSpreadsheet内で再計算されます（Python再実行不要）。
+## `config` シート形式
 
-## 制約（MVP）
+- ヘッダ行: `key | type | value`
+- `type`: `string | number | date | boolean`
+- 例:
+  - `country | string | JP`
+  - `start_date | date | 2026-01-01`
 
-- `config` の string 値に `'` が入る場合のエスケープは未対応
-- `data` の列順が変わると `ColN` 対応が崩れる可能性がある
+`Config` は重複 key、未知の type をエラーにします。
 
-## 次にやりたいこと / 今後の拡張
+## API 概要
 
-- 複数レポートの一括生成
-  - `write_reports({"report_sales": expr1, "report_users": expr2})` のようなAPIを追加し、複数QUERYをまとめて反映できるようにする
-- Configの入力安全性向上
-  - string値中のシングルクォートを `SUBSTITUTE(..., "'", "''")` で自動エスケープ
-  - 型不整合（date形式不正など）のバリデーションを強化
-- localeの取り扱い改善
-  - `locale` 明示指定に加えて、シート設定からの自動検出を検討
-- Query DSLの拡張
-  - `in_`, `is_null`, `is_not_null`, `avg/min/max`, OR条件などを段階的に追加
-- Colab利用の実運用強化
-  - Google認証（`google.colab.auth` + gspread/googleapiclient）を使った実APIアダプタを追加
-  - 「初回セットアップ→以降はconfig編集のみ」の運用手順をノートブック例として整備
-- ヘッダ/列順変更への耐性向上
-  - ヘッダ変更検出時の明確なエラー
-  - 列名ベースの再マッピング補助（差分ログ出力など）
-- テスト拡充
-  - 期待QUERY文字列のスナップショットテスト
-  - locale別・型別のコンパイル網羅テスト
+- `SheetBook.write_mart(df, sheet="data")`
+  - ヘッダ + データを書き込み
+  - 行の列数が不一致（ragged rows）の場合はエラー
+- `SheetBook.load_config(cfg)`
+  - `Config` にスプレッドシート上の設定値マップをロード
+- `SheetBook.write_report(sheet, query_expr, anchor_cell="A1")`
+  - ヘッダ検証（空/重複の列名を拒否）
+  - `=QUERY(...)` 文字列を生成して指定セルに書き込み
+
+## 制約
+
+- 現在の集計関数は `sum`, `count` のみ
+- 条件は `and` 連結のみ（`or` は未対応）
+- `where` は `q.col("...") <op> 値` 形式（`in`, `is null` などは未対応）
+
+## 開発
+
+```bash
+python -m pip install -e . pytest
+pytest
+```
