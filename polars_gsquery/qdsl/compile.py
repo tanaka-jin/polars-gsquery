@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 from polars_gsquery.config import ConfigRef
+from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
 from .ast import Agg, Order, Predicate, QueryExpr
@@ -33,14 +34,16 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     if expr.limit_n is not None:
         query_parts.append(f"limit {expr.limit_n}")
     if labels:
-        label_sql = ", ".join(f"{target} '{label}'" for target, label in labels)
+        label_sql = ", ".join(f"{target} '{_quote_query_string(label)}'" for target, label in labels)
         query_parts.append(f"label {label_sql}")
 
     query_text = "\n".join(query_parts)
     delim = function_arg_delimiter(locale)
     query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
     return CompiledQuery(
-        formula=f"=QUERY({expr.data_sheet}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})",
+        formula=(
+            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})"
+        ),
         query_text=query_text,
     )
 
@@ -78,7 +81,7 @@ def _compile_predicate(pred: Predicate, header_map: dict[str, str], dynamic: lis
         dynamic.append((token, right))
         return f"{left} {pred.op} {token}"
     if isinstance(right, str):
-        return f"{left} {pred.op} '{right}'"
+        return f"{left} {pred.op} '{_quote_query_string(right)}'"
     if isinstance(right, bool):
         return f"{left} {pred.op} {'TRUE' if right else 'FALSE'}"
     return f"{left} {pred.op} {right}"
@@ -127,12 +130,16 @@ def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]
 
 def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     if cfg_ref.type_name == "string":
-        return f'"\'" & {cfg_ref.a1_ref} & "\'"'
+        return f"\"'\" & SUBSTITUTE({cfg_ref.a1_ref}{delim} \"'\"{delim} \"''\") & \"'\""
     if cfg_ref.type_name == "date":
         return f'"date \'" & TEXT({cfg_ref.a1_ref}{delim} "yyyy-MM-dd") & "\'"'
     if cfg_ref.type_name == "boolean":
         return f'IF({cfg_ref.a1_ref}{delim} "TRUE"{delim} "FALSE")'
     return cfg_ref.a1_ref
+
+
+def _quote_query_string(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def _resolve_col(name: str, header_map: dict[str, str]) -> str:

@@ -27,10 +27,8 @@ def test_compile_formula_with_config_refs_ja_locale() -> None:
 
     formula = book.write_report("report_sales", expr, "A1")
     assert formula.startswith("=QUERY(data!A:Z; ")
-    assert '" & config!C2 & "\'"' in formula
+    assert 'SUBSTITUTE(config!C2; "\'"; "\'\'")' in formula
     assert 'TEXT(config!C3; "yyyy-MM-dd")' in formula
-
-
 
 
 def test_compile_formula_with_config_date_ref_en_locale_uses_text_format() -> None:
@@ -50,6 +48,7 @@ def test_compile_formula_with_config_date_ref_en_locale_uses_text_format() -> No
 
     formula = book.write_report("report_sales", expr, "A1")
     assert '"date \'" & TEXT(config!C2, "yyyy-MM-dd") & "\'"' in formula
+
 
 def test_locale_en_uses_comma_separator() -> None:
     api = SheetsAPI()
@@ -130,3 +129,42 @@ def test_orderby_unknown_column_raises_keyerror() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     with pytest.raises(KeyError):
         book.write_report("report_sales", expr)
+
+
+def test_compile_escapes_string_literal_and_alias_quotes() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["publisher", "sales"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
+        .select(["publisher", q.sum("sales").alias("sales_sum's")])
+        .where(q.col("publisher") == "O'Reilly")
+        .groupby(["publisher"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report_sales", expr)
+
+    assert "where A = 'O''Reilly'" in formula
+    assert "label sum(B) 'sales_sum''s'" in formula
+
+
+def test_compile_quotes_sheet_names_in_query_a1_range() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("raw data", "A:Z", 1, ["country", "sales"])
+    api.set_rows_fixture("Bob's sheet", [["key", "type", "value"], ["country", "string", "O'Reilly"]])
+
+    cfg = Config(sheet="Bob's sheet")
+    book = SheetBook("dummy", locale="en_US", api=api)
+    book.load_config(cfg)
+
+    expr = (
+        q.from_sheet(data_sheet="raw data", config_sheet="Bob's sheet", header_rows=1, range_="A:Z")
+        .select(["country", q.sum("sales")])
+        .where(q.col("country") == cfg.ref("country"))
+        .groupby(["country"])
+    )
+
+    formula = book.write_report("report", expr)
+    assert formula.startswith("=QUERY('raw data'!A:Z, ")
+    assert "SUBSTITUTE('Bob''s sheet'!C2, \"'\", \"''\")" in formula
