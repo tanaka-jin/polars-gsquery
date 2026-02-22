@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
@@ -17,8 +18,10 @@ class CompiledQuery:
 def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) -> CompiledQuery:
     query_parts: list[str] = []
     dynamic: list[tuple[str, ConfigRef]] = []
+    labels: list[tuple[str, str]] = []
+    aliases: dict[str, str] = {}
 
-    query_parts.append(f"select {_compile_select(expr.selected, header_map)}")
+    query_parts.append(f"select {_compile_select(expr.selected, header_map, labels, aliases)}")
 
     if expr.predicates:
         where_sql = " and ".join(_compile_predicate(p, header_map, dynamic) for p in expr.predicates)
@@ -26,11 +29,14 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     if expr.group_keys:
         query_parts.append(f"group by {', '.join(_resolve_col(k, header_map) for k in expr.group_keys)}")
     if expr.order:
-        query_parts.append(f"order by {_compile_order(expr.order, header_map)}")
+        query_parts.append(f"order by {_compile_order(expr.order, header_map, aliases)}")
     if expr.limit_n is not None:
         query_parts.append(f"limit {expr.limit_n}")
+    if labels:
+        label_sql = ", ".join(f"{target} '{label}'" for target, label in labels)
+        query_parts.append(f"label {label_sql}")
 
-    query_text = " ".join(query_parts)
+    query_text = "\n".join(query_parts)
     query_expr = _inject_dynamic_tokens(query_text, dynamic)
     delim = function_arg_delimiter(locale)
     return CompiledQuery(
@@ -39,7 +45,12 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     )
 
 
-def _compile_select(items: list[object], header_map: dict[str, str]) -> str:
+def _compile_select(
+    items: list[object],
+    header_map: dict[str, str],
+    labels: list[tuple[str, str]],
+    aliases: dict[str, str],
+) -> str:
     if not items:
         return "*"
     compiled: list[str] = []
@@ -48,9 +59,11 @@ def _compile_select(items: list[object], header_map: dict[str, str]) -> str:
             compiled.append(_resolve_col(item, header_map))
         elif isinstance(item, Agg):
             col = _resolve_col(item.column, header_map)
-            piece = f"{item.func}({col})"
+            target = f"{item.func}({col})"
+            piece = target
             if item.alias_name:
-                piece = f"{piece} label {item.func}({col}) '{item.alias_name}'"
+                labels.append((target, item.alias_name))
+                aliases[item.alias_name] = target
             compiled.append(piece)
         else:
             raise TypeError(f"Unsupported select item: {item!r}")
@@ -71,12 +84,22 @@ def _compile_predicate(pred: Predicate, header_map: dict[str, str], dynamic: lis
     return f"{left} {pred.op} {right}"
 
 
-def _compile_order(orders: list[Order], header_map: dict[str, str]) -> str:
+def _compile_order(orders: list[Order], header_map: dict[str, str], aliases: dict[str, str]) -> str:
     out: list[str] = []
     for item in orders:
-        col = header_map.get(item.name, item.name)
+        col = _resolve_order_target(item.name, header_map, aliases)
         out.append(col + (" desc" if item.descending else " asc"))
     return ", ".join(out)
+
+
+def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[str, str]) -> str:
+    if name in aliases:
+        return aliases[name]
+    if name in header_map:
+        return header_map[name]
+    if re.fullmatch(r"Col\d+", name):
+        return name
+    raise KeyError(f"Unknown order key in header map: {name}")
 
 
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]]) -> str:
