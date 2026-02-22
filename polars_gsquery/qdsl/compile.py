@@ -18,6 +18,18 @@ class CompiledQuery:
 
 
 def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) -> CompiledQuery:
+    query_text, dynamic = _render_query_text(expr, header_map)
+    delim = function_arg_delimiter(locale)
+    query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
+    return CompiledQuery(
+        formula=(
+            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})"
+        ),
+        query_text=query_text,
+    )
+
+
+def _render_query_text(expr: QueryExpr, header_map: dict[str, str]) -> tuple[str, list[tuple[str, ConfigRef]]]:
     query_parts: list[str] = []
     dynamic: list[tuple[str, ConfigRef]] = []
     labels: list[tuple[str, str]] = []
@@ -38,15 +50,7 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
         label_sql = ", ".join(f"{target} '{_quote_query_string(label)}'" for target, label in labels)
         query_parts.append(f"label {label_sql}")
 
-    query_text = "\n".join(query_parts)
-    delim = function_arg_delimiter(locale)
-    query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
-    return CompiledQuery(
-        formula=(
-            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})"
-        ),
-        query_text=query_text,
-    )
+    return "\n".join(query_parts), dynamic
 
 
 def _compile_select(

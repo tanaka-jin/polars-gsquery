@@ -54,16 +54,8 @@ class SheetBook:
         """Write a single polars.DataFrame to Sheet as mart/data source."""
         api = self._require_api()
         rows = _rows_from_frame(df)
+        _validate_rectangular_rows(rows)
         api.write_rows(sheet, start_cell, rows)
-
-        if not rows:
-            raise ValueError("write_mart produced no rows")
-        header_width = len(rows[0])
-        for i, row in enumerate(rows, start=1):
-            if len(row) != header_width:
-                raise ValueError(
-                    f"write_mart wrote ragged rows: row {i} has {len(row)} columns but header has {header_width}"
-                )
 
         if isinstance(api, SheetsAPI):
             api.set_header_fixture(sheet, "A:Z", 1, rows[0])
@@ -117,3 +109,15 @@ def _column_index_to_a1(index: int) -> str:
         n, rem = divmod(n - 1, 26)
         out.append(chr(ord("A") + rem))
     return "".join(reversed(out))
+
+
+def _validate_rectangular_rows(rows: list[list[object]]) -> None:
+    if not rows:
+        raise ValueError("write_mart produced no rows")
+
+    header_width = len(rows[0])
+    for i, row in enumerate(rows, start=1):
+        if len(row) != header_width:
+            raise ValueError(
+                f"write_mart wrote ragged rows: row {i} has {len(row)} columns but header has {header_width}"
+            )
