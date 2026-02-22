@@ -29,10 +29,10 @@ class SheetBook:
     @classmethod
     def from_colab(cls, spreadsheet_id: str, locale: str = "ja_JP") -> "SheetBook":
         """Colab-first constructor with Google auth + Sheets clients."""
+        import gspread
         from google.auth import default
         from google.colab import auth
         from googleapiclient.discovery import build
-        import gspread
 
         auth.authenticate_user()
         creds, _ = default(scopes=["https://www.googleapis.com/auth/spreadsheets"])
@@ -73,9 +73,13 @@ class SheetBook:
         for i, raw_name in enumerate(headers, start=1):
             name = str(raw_name).strip()
             if not name:
-                raise ValueError(f"Header contains an empty column name at {sheet}!{_column_index_to_a1(i)}{header_row}")
+                raise ValueError(
+                    f"Header contains an empty column name at {sheet}!{_column_index_to_a1(i)}{header_row}"
+                )
             if name in header_map:
-                raise ValueError(f"Header contains duplicate column name: {name!r} at {sheet}!{_column_index_to_a1(i)}{header_row}")
+                raise ValueError(
+                    f"Header contains duplicate column name: {name!r} at {sheet}!{_column_index_to_a1(i)}{header_row}"
+                )
             header_map[name] = _column_index_to_a1(i)
         return header_map
 

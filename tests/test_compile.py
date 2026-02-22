@@ -1,4 +1,5 @@
 import pytest
+
 from polars_gsquery import Config, SheetBook, q
 from polars_gsquery.sheets.api import SheetsAPI
 
@@ -64,8 +65,6 @@ def test_locale_en_uses_comma_separator() -> None:
     assert formula.startswith("=QUERY(data!A:Z, ")
 
 
-
-
 def test_locale_de_uses_semicolon_separator() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
@@ -78,6 +77,7 @@ def test_locale_de_uses_semicolon_separator() -> None:
     book = SheetBook("dummy", locale="de_DE", api=api)
     formula = book.write_report("report_sales", expr)
     assert formula.startswith("=QUERY(data!A:Z; ")
+
 
 def test_compiled_query_uses_multiline_and_label_clause() -> None:
     api = SheetsAPI()
