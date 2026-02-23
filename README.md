@@ -95,6 +95,7 @@ print(formula)
 - 条件は `and` 連結のみ（`or` は未対応）
 - `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"B > 100"`）も指定可能
 - 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能
+- `select(...)` でも `q.raw("{a} - {b}", a=q.col("A"), b=q.col("B"))` のような式列を指定可能（escape hatch）
 - 集計引数も Polars ライクに `q.sum("sales")` / `q.sum(q.col("sales"))` を利用可能
 - `select(...)` を省略、または空で指定した場合は `select *` として扱います
 - `from_sheet(..., range_=...)` の `range_` を省略した場合、ヘッダ列数から `A:<最終列>` を自動推定します

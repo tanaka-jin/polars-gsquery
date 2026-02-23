@@ -311,6 +311,19 @@ def test_where_accepts_raw_query_string() -> None:
     assert "where B > 100" in formula
 
 
+def test_select_supports_raw_expr_with_qcol_placeholders() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["A", "B"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(
+        [q.raw("{left} - {right}", left=q.col("A"), right=q.col("B"))]
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select A - B"' in formula
+
+
 def test_where_raw_supports_qcol_placeholders() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])

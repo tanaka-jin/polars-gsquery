@@ -65,6 +65,8 @@ def _compile_select(
     for item in items:
         if isinstance(item, str):
             compiled.append(_resolve_col(item, header_map))
+        elif isinstance(item, RawExpr):
+            compiled.append(_render_raw_expr(item, header_map))
         elif isinstance(item, Agg):
             col = _resolve_agg_column(item.column, header_map)
             target = f"{item.func}({col})"
