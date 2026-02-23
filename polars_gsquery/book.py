@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable, Protocol
 
 from .config import Config, ConfigRef
-from .qdsl.ast import Predicate, QueryExpr, RawPredicate
+from .qdsl.ast import Predicate, QueryExpr, RawExpr
 from .qdsl.compile import compile_formula
 from .sheets.api import GoogleSheetsAPI, SheetsAPI, SupportsSheetsAPI
 
@@ -170,8 +170,8 @@ def _bind_config_refs(expr: QueryExpr, cfg: Config) -> QueryExpr:
     )
 
 
-def _bind_predicate_config_ref(predicate: Predicate | RawPredicate, cfg: Config) -> Predicate | RawPredicate:
-    if isinstance(predicate, RawPredicate):
+def _bind_predicate_config_ref(predicate: Predicate | RawExpr, cfg: Config) -> Predicate | RawExpr:
+    if isinstance(predicate, RawExpr):
         return predicate
 
     if _is_deferred_config_ref(predicate.right):

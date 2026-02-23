@@ -10,9 +10,15 @@ class Column:
 
 
 @dataclass(frozen=True)
+class RawExpr:
+    query: str
+    named_columns: tuple[tuple[str, Column], ...] = ()
+
+
+@dataclass(frozen=True)
 class Agg:
     func: str
-    column: str
+    column: str | Column | RawExpr
     alias_name: str | None = None
 
     def alias(self, name: str) -> "Agg":
@@ -33,19 +39,13 @@ class Predicate:
 
 
 @dataclass(frozen=True)
-class RawPredicate:
-    query: str
-    named_columns: tuple[tuple[str, Column], ...] = ()
-
-
-@dataclass(frozen=True)
 class QueryExpr:
     data_sheet: str
     config_sheet: str | None
     range_: str | None
     header_rows: int
     selected: tuple[object, ...] = ()
-    predicates: tuple[Predicate | RawPredicate, ...] = ()
+    predicates: tuple[Predicate | RawExpr, ...] = ()
     group_keys: tuple[str, ...] = ()
     order: tuple[Order, ...] = ()
     limit_n: int | None = None
@@ -63,10 +63,10 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def where(self, predicate: Predicate | str | RawPredicate) -> "QueryExpr":
-        normalized: Predicate | RawPredicate
+    def where(self, predicate: Predicate | str | RawExpr) -> "QueryExpr":
+        normalized: Predicate | RawExpr
         if isinstance(predicate, str):
-            normalized = RawPredicate(predicate)
+            normalized = RawExpr(predicate)
         else:
             normalized = predicate
         return QueryExpr(

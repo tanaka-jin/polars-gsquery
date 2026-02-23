@@ -336,3 +336,26 @@ def test_clause_order_is_independent_from_call_order() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
     assert '"select A\nwhere B > 100"' in formula
+
+
+def test_agg_accepts_qcol_argument() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select([q.sum(q.col("sales"))])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select sum(A)"' in formula
+
+
+def test_agg_accepts_raw_with_qcol_placeholders() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(
+        [q.sum(q.raw("{sales}", sales=q.col("sales"))).alias("sales_sum")]
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "sum(A)" in formula
+    assert "label sum(A) 'sales_sum'" in formula

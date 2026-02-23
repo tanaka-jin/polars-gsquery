@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from polars_gsquery.config import ConfigRef
 
-from .ast import Agg, Column, Order, Predicate, QueryExpr, RawPredicate
+from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
 
 
 @dataclass(frozen=True)
@@ -46,22 +46,22 @@ class QueryNamespace:
     def col(self, name: str) -> ColExpr:
         return ColExpr(Column(name))
 
-    def sum(self, name: str) -> Agg:
-        return Agg("sum", name)
+    def sum(self, name: str | ColExpr | RawExpr) -> Agg:
+        return Agg("sum", _normalize_agg_column(name))
 
-    def count(self, name: str) -> Agg:
-        return Agg("count", name)
+    def count(self, name: str | ColExpr | RawExpr) -> Agg:
+        return Agg("count", _normalize_agg_column(name))
 
     def cfg(self, key: str, type_name: str = "string") -> ConfigRef:
         return ConfigRef(key=key, type_name=type_name, a1_ref=f"__CONFIG_KEY__:{key}")
 
-    def raw(self, query: str, /, **columns: ColExpr) -> RawPredicate:
+    def raw(self, query: str, /, **columns: ColExpr) -> RawExpr:
         named_columns: list[tuple[str, Column]] = []
         for alias, col_expr in columns.items():
             if not isinstance(col_expr, ColExpr):
                 raise TypeError(f"raw() placeholder must be q.col(...): {alias}={col_expr!r}")
             named_columns.append((alias, col_expr.col))
-        return RawPredicate(query=query, named_columns=tuple(named_columns))
+        return RawExpr(query=query, named_columns=tuple(named_columns))
 
     def desc(self, name: str) -> Order:
         return Order(name=name, descending=True)
@@ -71,3 +71,11 @@ class QueryNamespace:
 
 
 q = QueryNamespace()
+
+
+def _normalize_agg_column(name: str | ColExpr | RawExpr) -> str | Column | RawExpr:
+    if isinstance(name, ColExpr):
+        return name.col
+    if isinstance(name, RawExpr):
+        return name
+    return name

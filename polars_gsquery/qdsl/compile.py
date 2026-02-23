@@ -8,7 +8,7 @@ from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
-from .ast import Agg, Order, Predicate, QueryExpr, RawPredicate
+from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
 
 
 @dataclass
@@ -66,7 +66,7 @@ def _compile_select(
         if isinstance(item, str):
             compiled.append(_resolve_col(item, header_map))
         elif isinstance(item, Agg):
-            col = _resolve_col(item.column, header_map)
+            col = _resolve_agg_column(item.column, header_map)
             target = f"{item.func}({col})"
             piece = target
             if item.alias_name:
@@ -78,11 +78,19 @@ def _compile_select(
     return ", ".join(compiled)
 
 
+def _resolve_agg_column(column: str | Column | RawExpr, header_map: dict[str, str]) -> str:
+    if isinstance(column, Column):
+        return _resolve_col(column.name, header_map)
+    if isinstance(column, RawExpr):
+        return _render_raw_expr(column, header_map)
+    return _resolve_col(column, header_map)
+
+
 def _compile_predicate(
-    pred: Predicate | RawPredicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
+    pred: Predicate | RawExpr, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
 ) -> str:
-    if isinstance(pred, RawPredicate):
-        return _render_raw_predicate(pred, header_map)
+    if isinstance(pred, RawExpr):
+        return _render_raw_expr(pred, header_map)
 
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right
@@ -178,8 +186,8 @@ def _resolve_col(name: str, header_map: dict[str, str]) -> str:
     return header_map[name]
 
 
-def _render_raw_predicate(pred: RawPredicate, header_map: dict[str, str]) -> str:
-    rendered = pred.query
-    for alias, col in pred.named_columns:
+def _render_raw_expr(raw: RawExpr, header_map: dict[str, str]) -> str:
+    rendered = raw.query
+    for alias, col in raw.named_columns:
         rendered = rendered.replace(f"{{{alias}}}", _resolve_col(col.name, header_map))
     return rendered
