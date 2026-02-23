@@ -50,16 +50,13 @@ df = pl.DataFrame(
 )
 book.write_mart(df, sheet="data")
 
-# 2) config シートを読み込む
-cfg = Config(sheet="config")
-book.load_config(cfg)
-
-# 3) QUERY 式を組み立てて report シートへ配置
+# 2) QUERY 式を組み立てて report シートへ配置
+#    config_sheet を指定すると write_report 時に自動で config を読み込みます
 expr = (
-    q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
+    q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1)
     .select(["country", q.sum("sales").alias("sales_sum")])
-    .where(q.col("country") == cfg.ref("country"))
-    .where(q.col("event_date") >= cfg.ref("start_date"))
+    .where(q.col("country") == q.cfg("country"))
+    .where(q.col("event_date") >= q.cfg("start_date", type_name="date"))
     .groupby(["country"])
     .orderby([q.desc("sales_sum")])
     .limit(50)
@@ -85,8 +82,9 @@ print(formula)
   - ヘッダ + データを書き込み
   - 行の列数が不一致（ragged rows）の場合は書き込み前にエラー
   - `iter_rows()` が generator でも利用可能
-- `SheetBook.load_config(cfg)`
+- `SheetBook.load_config(cfg=None)`
   - `Config` にスプレッドシート上の設定値マップをロード
+  - `cfg` を省略した場合は、`SheetBook(config_sheet=...)` で指定したシート名を使用
 - `SheetBook.write_report(sheet, query_expr, anchor_cell="A1")`
   - ヘッダ検証（空/重複の列名を拒否）
   - `=QUERY(...)` 文字列を生成して指定セルに書き込み
@@ -95,8 +93,12 @@ print(formula)
 
 - 現在の集計関数は `sum`, `count` のみ
 - 条件は `and` 連結のみ（`or` は未対応）
-- `where` は `q.col("...") <op> 値` 形式（`in`, `is null` などは未対応）
+- `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"B > 100"`）も指定可能
+- 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能
+- `select(...)` でも `q.raw("{a} - {b}", a=q.col("A"), b=q.col("B"))` のような式列を指定可能（escape hatch）
+- 集計引数も Polars ライクに `q.sum("sales")` / `q.sum(q.col("sales"))` を利用可能
 - `select(...)` を省略、または空で指定した場合は `select *` として扱います
+- `from_sheet(..., range_=...)` の `range_` を省略した場合、ヘッダ列数から `A:<最終列>` を自動推定します
 
 ## 開発
 

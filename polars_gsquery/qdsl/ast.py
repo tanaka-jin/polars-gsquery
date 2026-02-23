@@ -10,9 +10,15 @@ class Column:
 
 
 @dataclass(frozen=True)
+class RawExpr:
+    query: str
+    named_columns: tuple[tuple[str, Column], ...] = ()
+
+
+@dataclass(frozen=True)
 class Agg:
     func: str
-    column: str
+    column: str | Column
     alias_name: str | None = None
 
     def alias(self, name: str) -> "Agg":
@@ -36,10 +42,10 @@ class Predicate:
 class QueryExpr:
     data_sheet: str
     config_sheet: str | None
-    range_: str
+    range_: str | None
     header_rows: int
     selected: tuple[object, ...] = ()
-    predicates: tuple[Predicate, ...] = ()
+    predicates: tuple[Predicate | RawExpr, ...] = ()
     group_keys: tuple[str, ...] = ()
     order: tuple[Order, ...] = ()
     limit_n: int | None = None
@@ -57,14 +63,19 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def where(self, predicate: Predicate) -> "QueryExpr":
+    def where(self, predicate: Predicate | str | RawExpr) -> "QueryExpr":
+        normalized: Predicate | RawExpr
+        if isinstance(predicate, str):
+            normalized = RawExpr(predicate)
+        else:
+            normalized = predicate
         return QueryExpr(
             data_sheet=self.data_sheet,
             config_sheet=self.config_sheet,
             range_=self.range_,
             header_rows=self.header_rows,
             selected=self.selected,
-            predicates=(*self.predicates, predicate),
+            predicates=(*self.predicates, normalized),
             group_keys=self.group_keys,
             order=self.order,
             limit_n=self.limit_n,
@@ -109,4 +120,17 @@ class QueryExpr:
             group_keys=self.group_keys,
             order=self.order,
             limit_n=n,
+        )
+
+    def with_range(self, range_: str) -> "QueryExpr":
+        return QueryExpr(
+            data_sheet=self.data_sheet,
+            config_sheet=self.config_sheet,
+            range_=range_,
+            header_rows=self.header_rows,
+            selected=self.selected,
+            predicates=self.predicates,
+            group_keys=self.group_keys,
+            order=self.order,
+            limit_n=self.limit_n,
         )

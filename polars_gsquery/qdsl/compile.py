@@ -8,7 +8,7 @@ from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
-from .ast import Agg, Order, Predicate, QueryExpr
+from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
 
 
 @dataclass
@@ -21,10 +21,10 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     query_text, dynamic = _render_query_text(expr, header_map)
     delim = function_arg_delimiter(locale)
     query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
+    data_range = _resolve_range(expr, header_map)
+    formula = f"=QUERY({quote_sheet_name(expr.data_sheet)}!{data_range}{delim} {query_expr}{delim} {expr.header_rows})"
     return CompiledQuery(
-        formula=(
-            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{expr.range_}{delim} {query_expr}{delim} {expr.header_rows})"
-        ),
+        formula=formula,
         query_text=query_text,
     )
 
@@ -65,8 +65,10 @@ def _compile_select(
     for item in items:
         if isinstance(item, str):
             compiled.append(_resolve_col(item, header_map))
+        elif isinstance(item, RawExpr):
+            compiled.append(_render_raw_expr(item, header_map))
         elif isinstance(item, Agg):
-            col = _resolve_col(item.column, header_map)
+            col = _resolve_agg_column(item.column, header_map)
             target = f"{item.func}({col})"
             piece = target
             if item.alias_name:
@@ -78,7 +80,18 @@ def _compile_select(
     return ", ".join(compiled)
 
 
-def _compile_predicate(pred: Predicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]) -> str:
+def _resolve_agg_column(column: str | Column, header_map: dict[str, str]) -> str:
+    if isinstance(column, Column):
+        return _resolve_col(column.name, header_map)
+    return _resolve_col(column, header_map)
+
+
+def _compile_predicate(
+    pred: Predicate | RawExpr, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
+) -> str:
+    if isinstance(pred, RawExpr):
+        return _render_raw_expr(pred, header_map)
+
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right
     if isinstance(right, ConfigRef):
@@ -143,6 +156,26 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     return cfg_ref.a1_ref
 
 
+def _resolve_range(expr: QueryExpr, header_map: dict[str, str]) -> str:
+    if expr.range_ is not None:
+        return expr.range_
+    if not header_map:
+        raise ValueError("Cannot infer range from empty header")
+    return f"A:{_a1_col_from_count(len(header_map))}"
+
+
+def _a1_col_from_count(count: int) -> str:
+    if count < 1:
+        raise ValueError("count must be >= 1")
+
+    out: list[str] = []
+    n = count
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        out.append(chr(ord("A") + rem))
+    return "".join(reversed(out))
+
+
 def _quote_query_string(value: str) -> str:
     return value.replace("'", "''")
 
@@ -151,3 +184,10 @@ def _resolve_col(name: str, header_map: dict[str, str]) -> str:
     if name not in header_map:
         raise KeyError(f"Unknown column in header map: {name}")
     return header_map[name]
+
+
+def _render_raw_expr(raw: RawExpr, header_map: dict[str, str]) -> str:
+    rendered = raw.query
+    for alias, col in raw.named_columns:
+        rendered = rendered.replace(f"{{{alias}}}", _resolve_col(col.name, header_map))
+    return rendered
