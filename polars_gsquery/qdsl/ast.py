@@ -35,6 +35,7 @@ class Predicate:
 @dataclass(frozen=True)
 class RawPredicate:
     query: str
+    named_columns: tuple[tuple[str, Column], ...] = ()
 
 
 @dataclass(frozen=True)

@@ -311,6 +311,23 @@ def test_where_accepts_raw_query_string() -> None:
     assert "where B > 100" in formula
 
 
+def test_where_raw_supports_qcol_placeholders() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        q.raw("{sales_col} > 100 and {country_col} = 'JP'", sales_col=q.col("sales"), country_col=q.col("country"))
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where B > 100 and A = 'JP'" in formula
+
+
+def test_where_raw_with_non_col_placeholder_raises_type_error() -> None:
+    with pytest.raises(TypeError, match=r"placeholder must be q\.col"):
+        q.raw("{sales} > 100", sales="sales")
+
+
 def test_clause_order_is_independent_from_call_order() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])

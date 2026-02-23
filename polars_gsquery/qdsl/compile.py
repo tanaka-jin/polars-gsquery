@@ -82,7 +82,7 @@ def _compile_predicate(
     pred: Predicate | RawPredicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
 ) -> str:
     if isinstance(pred, RawPredicate):
-        return pred.query
+        return _render_raw_predicate(pred, header_map)
 
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right
@@ -176,3 +176,10 @@ def _resolve_col(name: str, header_map: dict[str, str]) -> str:
     if name not in header_map:
         raise KeyError(f"Unknown column in header map: {name}")
     return header_map[name]
+
+
+def _render_raw_predicate(pred: RawPredicate, header_map: dict[str, str]) -> str:
+    rendered = pred.query
+    for alias, col in pred.named_columns:
+        rendered = rendered.replace(f"{{{alias}}}", _resolve_col(col.name, header_map))
+    return rendered
