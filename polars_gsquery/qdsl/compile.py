@@ -21,10 +21,10 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     query_text, dynamic = _render_query_text(expr, header_map)
     delim = function_arg_delimiter(locale)
     query_expr = _inject_dynamic_tokens(query_text, dynamic, delim)
+    data_range = _resolve_range(expr, header_map)
+    formula = f"=QUERY({quote_sheet_name(expr.data_sheet)}!{data_range}{delim} {query_expr}{delim} {expr.header_rows})"
     return CompiledQuery(
-        formula=(
-            f"=QUERY({quote_sheet_name(expr.data_sheet)}!{_resolve_range(expr, header_map)}{delim} {query_expr}{delim} {expr.header_rows})"
-        ),
+        formula=formula,
         query_text=query_text,
     )
 
@@ -78,7 +78,9 @@ def _compile_select(
     return ", ".join(compiled)
 
 
-def _compile_predicate(pred: Predicate | RawPredicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]) -> str:
+def _compile_predicate(
+    pred: Predicate | RawPredicate, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
+) -> str:
     if isinstance(pred, RawPredicate):
         return pred.query
 
@@ -146,7 +148,6 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     return cfg_ref.a1_ref
 
 
-
 def _resolve_range(expr: QueryExpr, header_map: dict[str, str]) -> str:
     if expr.range_ is not None:
         return expr.range_
@@ -165,6 +166,7 @@ def _a1_col_from_count(count: int) -> str:
         n, rem = divmod(n - 1, 26)
         out.append(chr(ord("A") + rem))
     return "".join(reversed(out))
+
 
 def _quote_query_string(value: str) -> str:
     return value.replace("'", "''")

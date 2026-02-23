@@ -314,11 +314,7 @@ def test_where_accepts_raw_query_string() -> None:
 def test_clause_order_is_independent_from_call_order() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
-    expr = (
-        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
-        .where(q.col("sales") > 100)
-        .select(["country"])
-    )
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(q.col("sales") > 100).select(["country"])
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
