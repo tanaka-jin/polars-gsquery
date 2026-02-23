@@ -18,7 +18,7 @@ class RawExpr:
 @dataclass(frozen=True)
 class Agg:
     func: str
-    column: str | Column | RawExpr
+    column: str | Column
     alias_name: str | None = None
 
     def alias(self, name: str) -> "Agg":

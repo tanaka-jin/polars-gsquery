@@ -46,10 +46,10 @@ class QueryNamespace:
     def col(self, name: str) -> ColExpr:
         return ColExpr(Column(name))
 
-    def sum(self, name: str | ColExpr | RawExpr) -> Agg:
+    def sum(self, name: str | ColExpr) -> Agg:
         return Agg("sum", _normalize_agg_column(name))
 
-    def count(self, name: str | ColExpr | RawExpr) -> Agg:
+    def count(self, name: str | ColExpr) -> Agg:
         return Agg("count", _normalize_agg_column(name))
 
     def cfg(self, key: str, type_name: str = "string") -> ConfigRef:
@@ -73,9 +73,7 @@ class QueryNamespace:
 q = QueryNamespace()
 
 
-def _normalize_agg_column(name: str | ColExpr | RawExpr) -> str | Column | RawExpr:
+def _normalize_agg_column(name: str | ColExpr) -> str | Column:
     if isinstance(name, ColExpr):
         return name.col
-    if isinstance(name, RawExpr):
-        return name
     return name

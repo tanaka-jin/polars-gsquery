@@ -78,11 +78,9 @@ def _compile_select(
     return ", ".join(compiled)
 
 
-def _resolve_agg_column(column: str | Column | RawExpr, header_map: dict[str, str]) -> str:
+def _resolve_agg_column(column: str | Column, header_map: dict[str, str]) -> str:
     if isinstance(column, Column):
         return _resolve_col(column.name, header_map)
-    if isinstance(column, RawExpr):
-        return _render_raw_expr(column, header_map)
     return _resolve_col(column, header_map)
 
 
