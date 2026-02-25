@@ -2,16 +2,46 @@
 
 Google スプレッドシートの `=QUERY(...)` を、Polars ライクな DSL で安全に組み立てるライブラリです。
 
+- **Python 側は列名ベース**で記述（`Col1`, `Col2` の直書きを避ける）
+- ヘッダ行から列名を解決し、内部で `ColN` に変換
+- `Config` シート参照で動的条件を構築
+- Colab 向けの `SheetBook.from_colab(...)` を提供
+
+---
+
 ## できること
 
-- `q` DSL で `select / where / group by / order by / limit / label(alias)` を構築
-- スプレッドシートのヘッダ行から列名を解決し、内部的に QUERY 列記号（`Col1`, `Col2`, ...）へ変換
-- `Config` シートの値参照（`string / number / date / boolean`）を動的に QUERY に埋め込み
-  - `string` は `SUBSTITUTE(..., "'", "''")` でクォートをエスケープ
-  - `date` は `TEXT(..., "yyyy-MM-dd")` で `date 'YYYY-MM-DD'` 形式へ変換
-  - `boolean` は `IF(..., "TRUE", "FALSE")` へ変換
-- 関数区切り文字はロケール依存（例: `ja_JP` / `en_US` は `,`、`de_DE` は `;`）
-- Colab 向けに `SheetBook.from_colab(...)` を提供（Google 認証 + Sheets クライアント初期化）
+### DSL で QUERY を組み立てる
+
+- `select`
+- `where`
+- `group_by`
+- `sort`
+- `limit`
+- 集計: `sum`, `count`, `avg`, `min`, `max`
+- エイリアス: `q.sum("sales").alias("sales_sum")`
+
+### 列名解決（header -> ColN）
+
+- スプレッドシートのヘッダを読み取り、`"sales"` のような列名を `Col3` に変換して QUERY を生成します。
+- 空ヘッダ・重複ヘッダはエラーになります。
+
+### Config シート参照（動的条件）
+
+- `q.cfg("key")` を使って、`Config` シート上の値を QUERY 条件に埋め込めます。
+- 型変換は `string` / `number` / `date` / `boolean` に対応します。
+- `Config` 参照セルが空の場合は、その条件は `1=1` に置き換えられます（動的フィルタの ON/OFF 用）。
+
+### ロケール依存の関数区切り文字
+
+- `en_US`, `ja_JP` などは `,`
+- `de_DE` など一部ロケールは `;`
+
+### Colab 向けショートカット
+
+- `SheetBook.from_colab(...)` で Google 認証 + Sheets クライアント初期化をまとめて実行できます。
+
+---
 
 ## インストール
 
@@ -19,28 +49,28 @@ Google スプレッドシートの `=QUERY(...)` を、Polars ライクな DSL �
 pip install polars-gsquery
 ```
 
-`SheetBook.from_colab(...)` を使う場合は、`gspread` / `google-api-python-client` / `google-auth` が必要です。
-基本的には extras を使って以下でまとめて入れるのを推奨します。
+Colab で `SheetBook.from_colab(...)` を使う場合は extras を推奨します。
 
 ```bash
-pip install 'polars-gsquery[colab]'
+pip install "polars-gsquery[colab]"
 ```
 
-すでにこれら依存を別で導入済みなら、`pip install polars-gsquery` だけでも動作します。
+> ライブラリ本体は軽量で、Colab 連携依存は optional dependencies です。
+
+---
 
 ## 最小例（Colab）
 
 ```python
 import polars as pl
-from polars_gsquery import SheetBook, Config, q
+from polars_gsquery import SheetBook, q
 
 SPREADSHEET_ID = "your-spreadsheet-id"
 
+# Colab 用ショートカット（Google認証込み）
 book = SheetBook.from_colab(spreadsheet_id=SPREADSHEET_ID, locale="ja_JP")
 
-# 1) DataFrame を data シートへ書き込み
-#    columns と iter_rows() を持つオブジェクトなら利用できます
-#    （polars.DataFrame はそのまま利用可）
+# 1) データを書き込み（ヘッダ + 行）
 df = pl.DataFrame(
     {
         "country": ["JP", "US", "JP"],
@@ -50,14 +80,13 @@ df = pl.DataFrame(
 )
 book.write_mart(df, sheet="data")
 
-# 2) QUERY 式を組み立てて report シートへ配置
-#    config_sheet を指定すると write_report 時に自動で config を読み込みます
+# 2) QUERY 式をDSLで構築して report シートに書く
 expr = (
     q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1)
     .select(["country", q.sum("sales").alias("sales_sum")])
     .where(q.col("country") == q.cfg("country"))
     .where(q.col("event_date") >= q.cfg("start_date", type_name="date"))
-    .group_by(["country"])
+    .group_by("country")
     .sort("sales_sum", descending=True)
     .limit(50)
 )
@@ -66,37 +95,79 @@ formula = book.write_report(sheet="report_sales", query_expr=expr, anchor_cell="
 print(formula)
 ```
 
+---
+
 ## `config` シート形式
 
-- ヘッダ行: `key | type | value`
-- `type`: `string | number | date | boolean`
-- 例:
-  - `country | string | JP`
-  - `start_date | date | 2026-01-01`
+デフォルトでは以下の列構成を想定します。
 
-`Config` は重複 key、未知の type をエラーにします。
+- `A`: `key`
+- `B`: `type`
+- `C`: `value`
 
-## Breaking change (ColN policy)
+例:
 
-- Python DSL での列指定は **列名（header）または alias のみ** をサポートします。
-- `sort` は Polars ライクに `expr.sort("price")` / `expr.sort("price", descending=True)` をサポートします。複数キーは `expr.sort(["country", "price"], descending=[False, True])` のように指定できます。
-- `Col1`, `Col2`, ... のような ColN 参照は **Python APIでは非サポート** です（エラーになります）。
-- ColN を使うのは、`q.raw()` で生の QUERY 文字列を書く場合のみです。
+| key        | type    | value      |
+|------------|---------|------------|
+| country    | string  | JP         |
+| start_date | date    | 2026-01-01 |
+| min_sales  | number  | 100        |
+| enabled    | boolean | TRUE       |
+
+### 挙動
+
+- `key` 重複: エラー
+- 未知の `type`: エラー
+- `value` が空文字: その条件は `1=1` としてスキップ
+
+### カスタマイズ
+
+列位置を変更したい場合は `Config` を明示します。
 
 ```python
-# ❌ Not allowed
-q.from_sheet("data").sort("Col2", descending=True)
+from polars_gsquery import Config
 
-# ✅ Allowed
-q.from_sheet("data").sort("price", descending=True)
+cfg = Config(
+    sheet="settings",
+    header_row=2,
+    key_col="B",
+    type_col="C",
+    value_col="D",
+)
 
-# QUERY式を書きたい場合のみ raw を使用
-q.from_sheet("data").where(q.raw("Col2 > 100"))
+book.load_config(cfg)
 ```
 
+---
 
+## 列指定ポリシー（重要）
 
-## 集計関数 / ブール式の例
+Python DSL では **列名（ヘッダ名）または alias** を使ってください。
+
+### OK
+
+```python
+q.from_sheet("data").select(["country", q.sum("sales").alias("sales_sum")]).sort("sales_sum")
+```
+
+### NG（Python API では非サポート）
+
+```python
+q.from_sheet("data").select(["Col2"])
+q.from_sheet("data").sort("Col2")
+```
+
+`ColN` を使いたいケースは、`q.raw(...)` を使って **生の QUERY 文字列** を明示的に書いてください。
+
+```python
+q.from_sheet("data").where("Col2 > 100")
+```
+
+---
+
+## DSL の使い方
+
+### 基本の集計
 
 ```python
 expr = (
@@ -105,14 +176,26 @@ expr = (
         "country",
         q.sum("sales").alias("sales_sum"),
         q.avg("sales").alias("sales_avg"),
-        q.min("sales"),
-        q.max("sales"),
+        q.min("sales").alias("sales_min"),
+        q.max("sales").alias("sales_max"),
         q.count("user_id").alias("users"),
     ])
-    .where((q.col("country") == "JP") | (q.col("country") == "US"))
-    .group_by(["country"])
+    .group_by("country")
+    .sort("sales_sum", descending=True)
+    .limit(100)
 )
 ```
+
+### where 条件（複数指定は AND）
+
+```python
+expr = q.from_sheet("data").where(
+    q.col("country") == "JP",
+    q.col("sales") >= 100,
+)
+```
+
+### `&` / `|` によるブール式
 
 ```python
 expr = q.from_sheet("data").where(
@@ -120,33 +203,119 @@ expr = q.from_sheet("data").where(
 )
 ```
 
-## API 概要
+### `q.raw(...)`（escape hatch）
 
-- `SheetBook.write_mart(df, sheet="data")`
-  - ヘッダ + データを書き込み
-  - 行の列数が不一致（ragged rows）の場合は書き込み前にエラー
-  - `iter_rows()` が generator でも利用可能
-- `SheetBook.load_config(cfg=None)`
-  - `Config` にスプレッドシート上の設定値マップをロード
-  - `cfg` を省略した場合は、`SheetBook(config_sheet=...)` で指定したシート名を使用
-- `SheetBook.write_report(sheet, query_expr, anchor_cell="A1")`
-  - ヘッダ検証（空/重複の列名を拒否）
-  - `=QUERY(...)` 文字列を生成して指定セルに書き込み
+`q.raw(...)` では、`q.col(...)` をプレースホルダとして埋め込めます。
 
-## 制約
+```python
+# where で raw
+expr = q.from_sheet("data").where(
+    q.raw(
+        "{sales_col} > 100 and {country_col} = 'JP'",
+        sales_col=q.col("sales"),
+        country_col=q.col("country"),
+    )
+)
 
-- 対応集計関数: `sum`, `count`, `avg`, `min`, `max`
-- 条件は `where(cond1, cond2, ...)` の暗黙 `and` に加えて、`|`（OR）と `&`（AND）の式をサポート
-- `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"Col2 > 100"`）も指定可能（raw escape hatch）
-- 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能
-- `select(...)` でも `q.raw("{a} - {b}", a=q.col("price"), b=q.col("discount"))` のような式列を指定可能（escape hatch）
-- 集計引数も Polars ライクに `q.sum("sales")` / `q.sum(q.col("sales"))` を利用可能
-- `select(...)` を省略、または空で指定した場合は `select *` として扱います
-- `from_sheet(..., range_=...)` の `range_` を省略した場合、ヘッダ列数から `A:<最終列>` を自動推定します
+# select で raw
+expr = q.from_sheet("data").select([
+    q.raw("{left} - {right}", left=q.col("price"), right=q.col("discount"))
+])
+```
+
+> `q.raw()` のプレースホルダには `q.col(...)` だけを渡せます。
+
+---
+
+## Config 参照の書き方（2通り）
+
+### 1) 手軽な書き方: `q.cfg(...)`
+
+`write_report()` 時に `config_sheet` を見て自動で解決されます。
+
+```python
+expr = (
+    q.from_sheet(data_sheet="data", config_sheet="config")
+    .where(q.col("country") == q.cfg("country"))
+    .where(q.col("event_date") >= q.cfg("start_date", type_name="date"))
+)
+```
+
+### 2) 明示的な書き方: `Config` + `cfg.ref(...)`
+
+型や参照を明示したい場合はこちら。
+
+```python
+from polars_gsquery import Config
+
+cfg = book.load_config(Config(sheet="config"))
+
+expr = (
+    q.from_sheet(data_sheet="data", config_sheet="config")
+    .where(q.col("country") == cfg.ref("country"))
+    .where(q.col("event_date") >= cfg.ref("start_date"))
+)
+```
+
+---
+
+## API 概要（公開 API）
+
+```python
+from polars_gsquery import SheetBook, Config, ConfigRef, q
+```
+
+### `SheetBook`
+
+- `SheetBook(spreadsheet_id, creds=None, locale="en_US", config_sheet="config", api=None)`
+- `SheetBook.from_colab(spreadsheet_id, locale="ja_JP")`
+- `load_config(cfg=None, start_cell="A1") -> Config`
+- `ensure_config_loaded(expr, start_cell="A1") -> QueryExpr`
+- `write_mart(df, sheet="data", start_cell="A1") -> None`
+- `get_header_map(sheet, header_row, range_) -> dict[str, str]`
+- `write_report(sheet, query_expr, anchor_cell="A1") -> str`
+
+### `q`（DSL namespace）
+
+- `q.from_sheet(data_sheet, config_sheet=None, header_rows=1, range_=None)`
+- `q.col(name)`
+- `q.sum(...)`, `q.count(...)`, `q.avg(...)`, `q.min(...)`, `q.max(...)`
+- `q.cfg(key, type_name="string")`
+- `q.raw(query, **columns)`
+
+---
+
+## 仕様メモ / 制約
+
+- `select(...)` を省略（または空）すると `select *`
+- `where(cond1, cond2, ...)` は暗黙 AND
+- `sort("col")` は昇順、`sort("col", descending=True)` で降順
+- 複数キーソート: `sort(["country", "sales_sum"], descending=[False, True])`
+- クエリ句の出力順は呼び出し順ではなく、`select -> where -> group by -> order by -> limit -> label`
+- QUERY 文字列内の文字列リテラル・label は適切にエスケープ
+- シート名に空白や `'` が含まれる場合も適切にクォート
+
+### `range_` 省略時の挙動
+
+- `range_` を省略すると、ヘッダから `A:<最終列>` を推定して QUERY 範囲を作ります。
+- 列数が多い場合や範囲を明示したい場合は `range_="A:Z"` のように指定を推奨します。
+
+---
+
+## `write_mart()` で受け取れるオブジェクト
+
+`write_mart()` は Polars DataFrame を想定していますが、以下を満たすオブジェクトなら利用できます。
+
+- `.columns` を持つ
+- `.iter_rows()` を持つ
+
+つまり Polars ライクな DataFrame 互換オブジェクトでも使えます。
+
+---
 
 ## 開発
 
 ```bash
-python -m pip install -e . pytest
+python -m pip install -e ".[dev]"
 pytest
 ```
