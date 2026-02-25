@@ -55,10 +55,10 @@ def _render_query_text(expr: QueryExpr, header_map: dict[str, str]) -> tuple[str
     query_parts.append(f"select {_compile_select(expr.selected, header_map, labels, aliases)}")
 
     if expr.predicates:
-        where_sql = " and ".join(_compile_predicate(p, header_map, dynamic) for p in expr.predicates)
-        query_parts.append(f"where {where_sql}")
+        query_parts.append(_compile_where_clause(expr.predicates, header_map, dynamic))
     if expr.group_keys:
-        query_parts.append(f"group by {', '.join(_resolve_col(k, header_map) for k in expr.group_keys)}")
+        group_sql = ", ".join(_resolve_col(k, header_map) for k in expr.group_keys)
+        query_parts.append(f"group by {group_sql}")
     if expr.order:
         query_parts.append(f"order by {_compile_order(expr.order, header_map, aliases)}")
     if expr.limit_n is not None:
@@ -136,6 +136,22 @@ def _compile_order(orders: Sequence[tuple[str, bool]], header_map: dict[str, str
         col = _resolve_order_target(name, header_map, aliases)
         out.append(col + (" desc" if descending else " asc"))
     return ", ".join(out)
+
+
+def _compile_where_clause(
+    predicates: Sequence[Predicate | BooleanExpr | RawExpr],
+    header_map: dict[str, str],
+    dynamic: list[_DynamicPredicate],
+) -> str:
+    lines = [_compile_predicate(pred, header_map, dynamic) for pred in predicates]
+    if len(lines) == 1:
+        return f"where {lines[0]}"
+
+    if any("(" in line and (" and " in line or " or " in line) for line in lines):
+        joined = "\n  and ".join(lines)
+        return f"where\n  {joined}"
+
+    return f"where {' and '.join(lines)}"
 
 
 def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[str, str]) -> str:
