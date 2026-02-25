@@ -588,3 +588,17 @@ def test_where_multiple_arguments_keep_implicit_and_behavior() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
     assert "where Col1 = 1 and Col2 = 2" in formula
+
+
+def test_where_multiple_arguments_with_boolean_group_uses_multiline_format() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b", "c"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        (q.col("a") == 1) | (q.col("b") == 2),
+        q.col("c") == 3,
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where\n  (Col1 = 1 or Col2 = 2)\n  and Col3 = 3" in formula
