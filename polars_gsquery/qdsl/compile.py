@@ -184,7 +184,9 @@ def _inject_dynamic_tokens(query_text: str, dynamic: list[_DynamicPredicate], de
         cursor = idx + len(item.token)
     if query_text[cursor:]:
         pieces.append(quote_formula_string(query_text[cursor:]))
-    return " & ".join(pieces)
+    if len(pieces) == 1:
+        return pieces[0]
+    return " &\n".join(pieces)
 
 
 def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
@@ -200,7 +202,13 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
 def _dynamic_predicate_expr(item: _DynamicPredicate, delim: str) -> str:
     blank_condition = _config_blank_condition_expr(item.cfg_ref, delim)
     predicate = f"{quote_formula_string(f'{item.left} {item.op} ')} & {_config_ref_expr(item.cfg_ref, delim)}"
-    return f"IF({blank_condition}{delim} {quote_formula_string('1=1')}{delim} {predicate})"
+    return (
+        "IF(\n"
+        f"  {blank_condition}{delim}\n"
+        f"  {quote_formula_string('1=1')}{delim}\n"
+        f"  {predicate}\n"
+        ")"
+    )
 
 
 def _config_blank_condition_expr(cfg_ref: ConfigRef, delim: str) -> str:
