@@ -270,13 +270,12 @@ def test_sort_asc_is_supported() -> None:
     assert "order by Col1 asc" in formula
 
 
-
-
 def test_select_and_group_by_accept_single_string() -> None:
     expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select("country").group_by("country")
 
     assert expr.selected == ("country",)
     assert expr.group_keys == ("country",)
+
 
 def test_select_omitted_defaults_to_star() -> None:
     api = SheetsAPI()
