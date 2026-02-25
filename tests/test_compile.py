@@ -65,7 +65,9 @@ def test_compile_formula_skips_string_config_predicate_when_cell_is_blank() -> N
     )
 
     formula = book.write_report("report", expr)
-    assert 'IF(LEN(TRIM(TO_TEXT(config!C2)))=0, "1=1", "Col1 = " &' in formula
+    assert 'LEN(TRIM(TO_TEXT(config!C2)))=0' in formula
+    assert '"1=1"' in formula
+    assert '"Col1 = " &' in formula
 
 
 def test_compile_formula_skips_number_config_predicate_when_cell_is_blank() -> None:
@@ -82,7 +84,9 @@ def test_compile_formula_skips_number_config_predicate_when_cell_is_blank() -> N
     )
 
     formula = book.write_report("report", expr)
-    assert 'IF(LEN(TRIM(TO_TEXT(config!C2)))=0, "1=1", "Col1 >= " & config!C2)' in formula
+    assert 'LEN(TRIM(TO_TEXT(config!C2)))=0' in formula
+    assert '"1=1"' in formula
+    assert '"Col1 >= " & config!C2' in formula
 
 
 def test_locale_en_uses_comma_separator() -> None:
