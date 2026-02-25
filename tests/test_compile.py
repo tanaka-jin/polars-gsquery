@@ -456,7 +456,7 @@ def test_select_supports_avg_with_group_by() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select Col1, avg(Col2)\ngroup by Col1"' in formula
+    assert '"select\n  Col1,\n  avg(Col2)\ngroup by Col1"' in formula
 
 
 def test_select_supports_min_max_with_group_by() -> None:
@@ -471,7 +471,7 @@ def test_select_supports_min_max_with_group_by() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select Col1, min(Col2), max(Col2)\ngroup by Col1"' in formula
+    assert '"select\n  Col1,\n  min(Col2),\n  max(Col2)\ngroup by Col1"' in formula
 
 
 def test_select_supports_new_aggs_with_alias_and_label() -> None:
@@ -484,7 +484,7 @@ def test_select_supports_new_aggs_with_alias_and_label() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert "label avg(Col1) 'avg_price', min(Col1) 'min_price', max(Col1) 'max_price'" in formula
+    assert "label\n  avg(Col1) 'avg_price',\n  min(Col1) 'min_price',\n  max(Col1) 'max_price'" in formula
 
 
 def test_select_supports_multiple_aggregations_in_single_select() -> None:
@@ -497,7 +497,7 @@ def test_select_supports_multiple_aggregations_in_single_select() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select sum(Col1), count(Col1), avg(Col1), min(Col1), max(Col1)"' in formula
+    assert '"select\n  sum(Col1),\n  count(Col1),\n  avg(Col1),\n  min(Col1),\n  max(Col1)"' in formula
 
 
 def test_where_supports_boolean_or_expression() -> None:
@@ -587,4 +587,18 @@ def test_where_multiple_arguments_keep_implicit_and_behavior() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert "where Col1 = 1 and Col2 = 2" in formula
+    assert "where\n  Col1 = 1\n  and Col2 = 2" in formula
+
+
+def test_where_multiple_arguments_with_boolean_group_uses_multiline_format() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b", "c"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        (q.col("a") == 1) | (q.col("b") == 2),
+        q.col("c") == 3,
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where\n  (Col1 = 1 or Col2 = 2)\n  and Col3 = 3" in formula

@@ -52,20 +52,21 @@ def _render_query_text(expr: QueryExpr, header_map: dict[str, str]) -> tuple[str
     labels: list[tuple[str, str]] = []
     aliases: dict[str, str] = {}
 
-    query_parts.append(f"select {_compile_select(expr.selected, header_map, labels, aliases)}")
+    select_sql = _compile_select(expr.selected, header_map, labels, aliases)
+    query_parts.append(_format_list_clause("select", select_sql.split(", ")))
 
     if expr.predicates:
-        where_sql = " and ".join(_compile_predicate(p, header_map, dynamic) for p in expr.predicates)
-        query_parts.append(f"where {where_sql}")
+        query_parts.append(_compile_where_clause(expr.predicates, header_map, dynamic))
     if expr.group_keys:
-        query_parts.append(f"group by {', '.join(_resolve_col(k, header_map) for k in expr.group_keys)}")
+        group_items = [_resolve_col(k, header_map) for k in expr.group_keys]
+        query_parts.append(_format_list_clause("group by", group_items))
     if expr.order:
-        query_parts.append(f"order by {_compile_order(expr.order, header_map, aliases)}")
+        query_parts.append(_format_list_clause("order by", _compile_order_items(expr.order, header_map, aliases)))
     if expr.limit_n is not None:
         query_parts.append(f"limit {expr.limit_n}")
     if labels:
-        label_sql = ", ".join(f"{target} '{_quote_query_string(label)}'" for target, label in labels)
-        query_parts.append(f"label {label_sql}")
+        label_items = [f"{target} '{_quote_query_string(label)}'" for target, label in labels]
+        query_parts.append(_format_list_clause("label", label_items))
 
     return "\n".join(query_parts), dynamic
 
@@ -131,11 +132,45 @@ def _compile_predicate(
 
 
 def _compile_order(orders: Sequence[tuple[str, bool]], header_map: dict[str, str], aliases: dict[str, str]) -> str:
+    return ", ".join(_compile_order_items(orders, header_map, aliases))
+
+
+def _compile_order_items(
+    orders: Sequence[tuple[str, bool]], header_map: dict[str, str], aliases: dict[str, str]
+) -> list[str]:
     out: list[str] = []
     for name, descending in orders:
         col = _resolve_order_target(name, header_map, aliases)
         out.append(col + (" desc" if descending else " asc"))
-    return ", ".join(out)
+    return out
+
+
+def _compile_where_clause(
+    predicates: Sequence[Predicate | BooleanExpr | RawExpr],
+    header_map: dict[str, str],
+    dynamic: list[_DynamicPredicate],
+) -> str:
+    lines = [_compile_predicate(pred, header_map, dynamic) for pred in predicates]
+    if len(lines) == 1:
+        return f"where {lines[0]}"
+
+    rendered = [lines[0]]
+    rendered.extend(f"and {line}" for line in lines[1:])
+    return _format_list_clause("where", rendered, trailing_comma=False)
+
+
+def _format_list_clause(keyword: str, items: Sequence[str], trailing_comma: bool = True) -> str:
+    if not items:
+        return keyword
+    if len(items) == 1:
+        return f"{keyword} {items[0]}"
+
+    last_idx = len(items) - 1
+    lines: list[str] = []
+    for i, item in enumerate(items):
+        suffix = "," if trailing_comma and i < last_idx else ""
+        lines.append(f"  {item}{suffix}")
+    return f"{keyword}\n" + "\n".join(lines)
 
 
 def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[str, str]) -> str:
