@@ -51,6 +51,40 @@ def test_compile_formula_with_config_date_ref_en_locale_uses_text_format() -> No
     assert '"date \'" & TEXT(config!C2, "yyyy-MM-dd") & "\'"' in formula
 
 
+def test_compile_formula_skips_string_config_predicate_when_cell_is_blank() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country"])
+    api.set_rows_fixture("config", [["key", "type", "value"], ["country", "string", ""]])
+
+    cfg = Config(sheet="config")
+    book = SheetBook("dummy", locale="en_US", api=api)
+    book.load_config(cfg)
+
+    expr = q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z").where(
+        q.col("country") == cfg.ref("country")
+    )
+
+    formula = book.write_report("report", expr)
+    assert 'IF(LEN(TRIM(TO_TEXT(config!C2)))=0, "1=1", "Col1 = " &' in formula
+
+
+def test_compile_formula_skips_number_config_predicate_when_cell_is_blank() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["sales"])
+    api.set_rows_fixture("config", [["key", "type", "value"], ["min_sales", "number", ""]])
+
+    cfg = Config(sheet="config")
+    book = SheetBook("dummy", locale="en_US", api=api)
+    book.load_config(cfg)
+
+    expr = q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z").where(
+        q.col("sales") >= cfg.ref("min_sales")
+    )
+
+    formula = book.write_report("report", expr)
+    assert 'IF(LEN(TRIM(TO_TEXT(config!C2)))=0, "1=1", "Col1 >= " & config!C2)' in formula
+
+
 def test_locale_en_uses_comma_separator() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])

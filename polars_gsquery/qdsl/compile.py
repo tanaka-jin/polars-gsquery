@@ -26,6 +26,14 @@ class CompiledQuery:
     query_text: str
 
 
+@dataclass(frozen=True)
+class _DynamicPredicate:
+    token: str
+    left: str
+    op: str
+    cfg_ref: ConfigRef
+
+
 def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) -> CompiledQuery:
     query_text, dynamic = _render_query_text(expr, header_map)
     delim = function_arg_delimiter(locale)
@@ -38,9 +46,9 @@ def compile_formula(expr: QueryExpr, header_map: dict[str, str], locale: str) ->
     )
 
 
-def _render_query_text(expr: QueryExpr, header_map: dict[str, str]) -> tuple[str, list[tuple[str, ConfigRef]]]:
+def _render_query_text(expr: QueryExpr, header_map: dict[str, str]) -> tuple[str, list[_DynamicPredicate]]:
     query_parts: list[str] = []
-    dynamic: list[tuple[str, ConfigRef]] = []
+    dynamic: list[_DynamicPredicate] = []
     labels: list[tuple[str, str]] = []
     aliases: dict[str, str] = {}
 
@@ -102,7 +110,7 @@ def _resolve_agg_column(column: str | Column, header_map: dict[str, str]) -> str
 
 
 def _compile_predicate(
-    pred: Predicate | BooleanExpr | RawExpr, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
+    pred: Predicate | BooleanExpr | RawExpr, header_map: dict[str, str], dynamic: list[_DynamicPredicate]
 ) -> str:
     if isinstance(pred, RawExpr):
         return _render_raw_expr(pred, header_map)
@@ -114,9 +122,9 @@ def _compile_predicate(
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right
     if isinstance(right, ConfigRef):
-        token = f"__CFG_{len(dynamic)}__"
-        dynamic.append((token, right))
-        return f"{left} {pred.op} {token}"
+        token = f"__CFG_PRED_{len(dynamic)}__"
+        dynamic.append(_DynamicPredicate(token=token, left=left, op=pred.op, cfg_ref=right))
+        return token
     if isinstance(right, str):
         return f"{left} {pred.op} '{_quote_query_string(right)}'"
     if isinstance(right, bool):
@@ -142,18 +150,18 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
     raise KeyError(f"Unknown order key in header map: {name}")
 
 
-def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
+def _inject_dynamic_tokens(query_text: str, dynamic: list[_DynamicPredicate], delim: str) -> str:
     if not dynamic:
         return quote_formula_string(query_text)
     pieces: list[str] = []
     cursor = 0
-    for token, cfg_ref in dynamic:
-        idx = query_text.index(token, cursor)
+    for item in dynamic:
+        idx = query_text.index(item.token, cursor)
         static = query_text[cursor:idx]
         if static:
             pieces.append(quote_formula_string(static))
-        pieces.append(_config_ref_expr(cfg_ref, delim))
-        cursor = idx + len(token)
+        pieces.append(_dynamic_predicate_expr(item, delim))
+        cursor = idx + len(item.token)
     if query_text[cursor:]:
         pieces.append(quote_formula_string(query_text[cursor:]))
     return " & ".join(pieces)
@@ -167,6 +175,16 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
     if cfg_ref.type_name == "boolean":
         return f'IF({cfg_ref.a1_ref}{delim} "TRUE"{delim} "FALSE")'
     return cfg_ref.a1_ref
+
+
+def _dynamic_predicate_expr(item: _DynamicPredicate, delim: str) -> str:
+    blank_condition = _config_blank_condition_expr(item.cfg_ref, delim)
+    predicate = f"{quote_formula_string(f'{item.left} {item.op} ')} & {_config_ref_expr(item.cfg_ref, delim)}"
+    return f"IF({blank_condition}{delim} {quote_formula_string('1=1')}{delim} {predicate})"
+
+
+def _config_blank_condition_expr(cfg_ref: ConfigRef, delim: str) -> str:
+    return f"LEN(TRIM(TO_TEXT({cfg_ref.a1_ref})))=0"
 
 
 def _resolve_range(expr: QueryExpr, header_map: dict[str, str]) -> str:
