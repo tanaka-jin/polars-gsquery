@@ -61,7 +61,6 @@ class QueryNamespace:
     def max(self, name: str | ColExpr) -> Agg:
         return Agg("max", _normalize_agg_column(name))
 
-
     def cfg(self, key: str, type_name: str = "string") -> ConfigRef:
         return ConfigRef(key=key, type_name=type_name, a1_ref=f"__CONFIG_KEY__:{key}")
 
