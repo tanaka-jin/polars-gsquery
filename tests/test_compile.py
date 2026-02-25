@@ -21,8 +21,8 @@ def test_compile_formula_with_config_refs_ja_locale() -> None:
         .select(["country", q.sum("sales").alias("sales_sum")])
         .where(q.col("country") == cfg.ref("country"))
         .where(q.col("event_date") >= cfg.ref("start_date"))
-        .groupby(["country"])
-        .orderby([q.desc("sales_sum")])
+        .group_by(["country"])
+        .sort([q.desc("sales_sum")])
         .limit(50)
     )
 
@@ -91,7 +91,7 @@ def test_locale_en_uses_comma_separator() -> None:
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales")])
-        .groupby(["country"])
+        .group_by(["country"])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -105,7 +105,7 @@ def test_locale_de_uses_semicolon_separator() -> None:
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales")])
-        .groupby(["country"])
+        .group_by(["country"])
     )
 
     book = SheetBook("dummy", locale="de_DE", api=api)
@@ -120,7 +120,7 @@ def test_compiled_query_uses_multiline_and_label_clause() -> None:
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
-        .groupby(["country"])
+        .group_by(["country"])
         .limit(10)
     )
 
@@ -132,15 +132,15 @@ def test_compiled_query_uses_multiline_and_label_clause() -> None:
     assert "label sum(Col2) 'sales_sum'" in formula
 
 
-def test_orderby_alias_name_is_supported() -> None:
+def test_sort_alias_name_is_supported() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
-        .groupby(["country"])
-        .orderby([q.desc("sales_sum")])
+        .group_by(["country"])
+        .sort([q.desc("sales_sum")])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -148,15 +148,15 @@ def test_orderby_alias_name_is_supported() -> None:
     assert "order by sum(Col2) desc" in formula
 
 
-def test_orderby_a1_column_name_is_rejected() -> None:
+def test_sort_a1_column_name_is_rejected() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
-        .groupby(["country"])
-        .orderby([q.desc("B")])
+        .group_by(["country"])
+        .sort([q.desc("B")])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -164,15 +164,15 @@ def test_orderby_a1_column_name_is_rejected() -> None:
         book.write_report("report_sales", expr)
 
 
-def test_orderby_unknown_column_raises_keyerror() -> None:
+def test_sort_unknown_column_raises_keyerror() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
     expr = (
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
-        .groupby(["country"])
-        .orderby([q.desc("not_exists")])
+        .group_by(["country"])
+        .sort([q.desc("not_exists")])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -188,7 +188,7 @@ def test_compile_escapes_string_literal_and_alias_quotes() -> None:
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["publisher", q.sum("sales").alias("sales_sum's")])
         .where(q.col("publisher") == "O'Reilly")
-        .groupby(["publisher"])
+        .group_by(["publisher"])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -211,7 +211,7 @@ def test_compile_quotes_sheet_names_in_query_a1_range() -> None:
         q.from_sheet(data_sheet="raw data", config_sheet="Bob's sheet", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales")])
         .where(q.col("country") == cfg.ref("country"))
-        .groupby(["country"])
+        .group_by(["country"])
     )
 
     formula = book.write_report("report", expr)
@@ -239,25 +239,32 @@ def test_limit_negative_raises_value_error() -> None:
         expr.limit(-1)
 
 
-def test_orderby_rejects_single_string_input() -> None:
+def test_sort_rejects_single_string_input() -> None:
     expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
 
     with pytest.raises(TypeError, match="expects a sequence"):
-        expr.orderby("Col2")
+        expr.sort("Col2")
 
 
-def test_orderby_rejects_non_order_items() -> None:
+def test_sort_rejects_non_order_items() -> None:
     expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
 
     with pytest.raises(TypeError, match="item must be Order"):
-        expr.orderby(["country"])
+        expr.sort(["country"])
 
 
-def test_orderby_asc_is_supported() -> None:
+def test_old_method_names_are_removed() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    assert not hasattr(expr, "groupby")
+    assert not hasattr(expr, "orderby")
+
+
+def test_sort_asc_is_supported() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.asc("country")])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort([q.asc("country")])
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
@@ -306,25 +313,25 @@ def test_where_numeric_and_bool_literals_are_compiled(value: object, expected: s
 
 
 @pytest.mark.parametrize("name", ["Col2", "col2"])
-def test_orderby_coln_reference_is_rejected_with_policy_message(name: str) -> None:
+def test_sort_coln_reference_is_rejected_with_policy_message(name: str) -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc(name)])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort([q.desc(name)])
 
     book = SheetBook("dummy", locale="en_US", api=api)
     with pytest.raises(KeyError, match="ColN style column references are not supported"):
         book.write_report("report", expr)
 
 
-def test_orderby_prefers_alias_over_header_name() -> None:
+def test_sort_prefers_alias_over_header_name() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["sales_sum", "sales"])
 
     expr = (
         q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
         .select(["sales_sum", q.sum("sales").alias("sales_sum")])
-        .orderby([q.desc("sales_sum")])
+        .sort([q.desc("sales_sum")])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -420,7 +427,7 @@ def test_agg_accepts_qcol_argument() -> None:
     assert '"select sum(Col1)"' in formula
 
 
-def test_select_supports_avg_without_groupby() -> None:
+def test_select_supports_avg_without_group_by() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["price"])
 
@@ -431,14 +438,14 @@ def test_select_supports_avg_without_groupby() -> None:
     assert '"select avg(Col1)"' in formula
 
 
-def test_select_supports_avg_with_groupby() -> None:
+def test_select_supports_avg_with_group_by() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "price"])
 
     expr = (
         q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
         .select(["country", q.avg("price")])
-        .groupby(["country"])
+        .group_by(["country"])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -446,14 +453,14 @@ def test_select_supports_avg_with_groupby() -> None:
     assert '"select Col1, avg(Col2)\ngroup by Col1"' in formula
 
 
-def test_select_supports_min_max_with_groupby() -> None:
+def test_select_supports_min_max_with_group_by() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "price"])
 
     expr = (
         q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
         .select(["country", q.min("price"), q.max("price")])
-        .groupby(["country"])
+        .group_by(["country"])
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
