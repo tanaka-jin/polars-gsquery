@@ -110,6 +110,26 @@ def test_write_mart_empty_columns_and_rows_is_allowed() -> None:
     assert api.read_rows("data") == [[]]
 
 
+def test_write_mart_then_get_header_map_works_without_explicit_header_fixture() -> None:
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+
+    book.write_mart(FakeDF(), sheet="data")
+
+    assert book.get_header_map("data", 1, "A:Z") == {"a": "Col1", "b": "Col2"}
+
+
+def test_write_mart_then_write_report_works_without_explicit_header_fixture() -> None:
+    api = SheetsAPI()
+    book = SheetBook("dummy", api=api)
+    book.write_mart(FakeDF(), sheet="data")
+
+    expr = q.from_sheet(data_sheet="data").select(["a"])
+
+    formula = book.write_report("report", expr)
+    assert formula.startswith("=QUERY(data!A:B,")
+
+
 def test_write_mart_ragged_rows_do_not_write_partial_data() -> None:
     class RaggedDF:
         columns = ["a", "b"]

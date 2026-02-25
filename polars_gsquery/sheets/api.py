@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Protocol
 
+from .a1 import column_a1_to_index
+
 
 def _header_row_range(range_: str, header_row: int) -> str:
     start_col, end_col = range_.split(":", maxsplit=1)
@@ -47,9 +49,17 @@ class SheetsAPI:
     def read_header(self, sheet: str, range_: str, header_row: int) -> list[str]:
         key = f"HEADER:{range_}:{header_row}"
         value = self._sheets.get(sheet, {}).get(key)
-        if not isinstance(value, list):
-            raise KeyError(f"Missing header fixture for {sheet}!{range_} row={header_row}")
-        return value
+        if isinstance(value, list):
+            return value
+
+        rows = self._sheets.get(sheet, {}).get("ROWS:A1")
+        if isinstance(rows, list) and header_row == 1 and rows:
+            start_col, end_col = range_.split(":", maxsplit=1)
+            start = column_a1_to_index(start_col) - 1
+            end = column_a1_to_index(end_col)
+            return [str(v) for v in rows[0][start:end]]
+
+        raise KeyError(f"Missing header fixture for {sheet}!{range_} row={header_row}")
 
     def set_header_fixture(self, sheet: str, range_: str, header_row: int, headers: list[str]) -> None:
         self.ensure_sheet(sheet)
