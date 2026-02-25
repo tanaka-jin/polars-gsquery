@@ -118,15 +118,9 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
         return aliases[name]
     if name in header_map:
         return header_map[name]
-    if _is_a1_column_ref(name):
-        return name
     if re.fullmatch(r"Col\d+", name):
         return name
     raise KeyError(f"Unknown order key in header map: {name}")
-
-
-def _is_a1_column_ref(name: str) -> bool:
-    return bool(name) and name.isalpha() and name.isascii() and name.isupper()
 
 
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
