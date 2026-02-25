@@ -94,7 +94,7 @@ def _compile_select(
             compiled.append(piece)
         else:
             raise TypeError(f"Unsupported select item: {item!r}")
-    return ", ".join(compiled)
+    return _format_clause_items(compiled)
 
 
 def _compile_agg_target(item: Agg, col: str) -> str:
@@ -135,7 +135,7 @@ def _compile_order(orders: Sequence[tuple[str, bool]], header_map: dict[str, str
     for name, descending in orders:
         col = _resolve_order_target(name, header_map, aliases)
         out.append(col + (" desc" if descending else " asc"))
-    return ", ".join(out)
+    return _format_clause_items(out)
 
 
 def _compile_where_clause(
@@ -152,6 +152,12 @@ def _compile_where_clause(
         return f"where\n  {joined}"
 
     return f"where {' and '.join(lines)}"
+
+
+def _format_clause_items(items: Sequence[str]) -> str:
+    if len(items) <= 1:
+        return ", ".join(items)
+    return ",\n  ".join(items)
 
 
 def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[str, str]) -> str:
