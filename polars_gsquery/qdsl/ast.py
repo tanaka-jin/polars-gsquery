@@ -101,7 +101,7 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def groupby(self, keys: Sequence[str]) -> "QueryExpr":
+    def group_by(self, keys: Sequence[str]) -> "QueryExpr":
         return QueryExpr(
             data_sheet=self.data_sheet,
             config_sheet=self.config_sheet,
@@ -114,14 +114,14 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def orderby(self, items: Sequence[Order]) -> "QueryExpr":
+    def sort(self, items: Sequence[Order]) -> "QueryExpr":
         if isinstance(items, str):
-            raise TypeError("orderby() expects a sequence of q.asc()/q.desc() items, not a string")
+            raise TypeError("sort() expects a sequence of q.asc()/q.desc() items, not a string")
 
         normalized = tuple(items)
         for item in normalized:
             if not isinstance(item, Order):
-                raise TypeError(f"orderby() item must be Order (q.asc/q.desc), got: {item!r}")
+                raise TypeError(f"sort() item must be Order (q.asc/q.desc), got: {item!r}")
 
         return QueryExpr(
             data_sheet=self.data_sheet,

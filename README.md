@@ -57,8 +57,8 @@ expr = (
     .select(["country", q.sum("sales").alias("sales_sum")])
     .where(q.col("country") == q.cfg("country"))
     .where(q.col("event_date") >= q.cfg("start_date", type_name="date"))
-    .groupby(["country"])
-    .orderby([q.desc("sales_sum")])
+    .group_by(["country"])
+    .sort([q.desc("sales_sum")])
     .limit(50)
 )
 
@@ -79,16 +79,16 @@ print(formula)
 ## Breaking change (ColN policy)
 
 - Python DSL での列指定は **列名（header）または alias のみ** をサポートします。
-- `orderby` は `q.orderby([q.asc("price")])` のように `Order` の配列を受け取り、`q.orderby("Col2")` のような文字列直渡しはエラーです。
+- `sort` は `q.sort([q.asc("price")])` のように `Order` の配列を受け取り、`q.sort("Col2")` のような文字列直渡しはエラーです。
 - `Col1`, `Col2`, ... のような ColN 参照は **Python APIでは非サポート** です（エラーになります）。
 - ColN を使うのは、`q.raw()` で生の QUERY 文字列を書く場合のみです。
 
 ```python
 # ❌ Not allowed
-q.from_sheet("data").orderby([q.desc("Col2")])
+q.from_sheet("data").sort([q.desc("Col2")])
 
 # ✅ Allowed
-q.from_sheet("data").orderby([q.desc("price")])
+q.from_sheet("data").sort([q.desc("price")])
 
 # QUERY式を書きたい場合のみ raw を使用
 q.from_sheet("data").where(q.raw("Col2 > 100"))
@@ -110,7 +110,7 @@ expr = (
         q.count("user_id").alias("users"),
     ])
     .where((q.col("country") == "JP") | (q.col("country") == "US"))
-    .groupby(["country"])
+    .group_by(["country"])
 )
 ```
 
