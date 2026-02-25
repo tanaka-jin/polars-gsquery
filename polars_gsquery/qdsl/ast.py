@@ -37,6 +37,25 @@ class Predicate:
     op: str
     right: object
 
+    def __and__(self, other: "Predicate | BooleanExpr") -> "BooleanExpr":
+        return BooleanExpr(left=self, op="and", right=other)
+
+    def __or__(self, other: "Predicate | BooleanExpr") -> "BooleanExpr":
+        return BooleanExpr(left=self, op="or", right=other)
+
+
+@dataclass(frozen=True)
+class BooleanExpr:
+    left: Predicate | "BooleanExpr"
+    op: str
+    right: Predicate | "BooleanExpr"
+
+    def __and__(self, other: Predicate | "BooleanExpr") -> "BooleanExpr":
+        return BooleanExpr(left=self, op="and", right=other)
+
+    def __or__(self, other: Predicate | "BooleanExpr") -> "BooleanExpr":
+        return BooleanExpr(left=self, op="or", right=other)
+
 
 @dataclass(frozen=True)
 class QueryExpr:
@@ -45,7 +64,7 @@ class QueryExpr:
     range_: str | None
     header_rows: int
     selected: tuple[object, ...] = ()
-    predicates: tuple[Predicate | RawExpr, ...] = ()
+    predicates: tuple[Predicate | BooleanExpr | RawExpr, ...] = ()
     group_keys: tuple[str, ...] = ()
     order: tuple[Order, ...] = ()
     limit_n: int | None = None
@@ -63,19 +82,20 @@ class QueryExpr:
             limit_n=self.limit_n,
         )
 
-    def where(self, predicate: Predicate | str | RawExpr) -> "QueryExpr":
-        normalized: Predicate | RawExpr
-        if isinstance(predicate, str):
-            normalized = RawExpr(predicate)
-        else:
-            normalized = predicate
+    def where(self, *predicates: Predicate | BooleanExpr | str | RawExpr) -> "QueryExpr":
+        normalized: list[Predicate | BooleanExpr | RawExpr] = []
+        for predicate in predicates:
+            if isinstance(predicate, str):
+                normalized.append(RawExpr(predicate))
+            else:
+                normalized.append(predicate)
         return QueryExpr(
             data_sheet=self.data_sheet,
             config_sheet=self.config_sheet,
             range_=self.range_,
             header_rows=self.header_rows,
             selected=self.selected,
-            predicates=(*self.predicates, normalized),
+            predicates=(*self.predicates, *normalized),
             group_keys=self.group_keys,
             order=self.order,
             limit_n=self.limit_n,
