@@ -10,6 +10,15 @@ from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_s
 
 from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
 
+COLN_API_ERROR = (
+    "ColN style column references are not supported in the Python API. "
+    "Use column names or aliases. If you need raw QUERY syntax, use q.raw()."
+)
+
+
+def _is_coln_reference(name: str) -> bool:
+    return bool(re.fullmatch(r"col\d+", name, flags=re.IGNORECASE))
+
 
 @dataclass
 class CompiledQuery:
@@ -118,15 +127,9 @@ def _resolve_order_target(name: str, header_map: dict[str, str], aliases: dict[s
         return aliases[name]
     if name in header_map:
         return header_map[name]
-    if _is_a1_column_ref(name):
-        return name
-    if re.fullmatch(r"Col\d+", name):
-        return name
+    if _is_coln_reference(name):
+        raise KeyError(COLN_API_ERROR)
     raise KeyError(f"Unknown order key in header map: {name}")
-
-
-def _is_a1_column_ref(name: str) -> bool:
-    return bool(name) and name.isalpha() and name.isascii() and name.isupper()
 
 
 def _inject_dynamic_tokens(query_text: str, dynamic: list[tuple[str, ConfigRef]], delim: str) -> str:
@@ -181,6 +184,8 @@ def _quote_query_string(value: str) -> str:
 
 
 def _resolve_col(name: str, header_map: dict[str, str]) -> str:
+    if _is_coln_reference(name):
+        raise KeyError(COLN_API_ERROR)
     if name not in header_map:
         raise KeyError(f"Unknown column in header map: {name}")
     return header_map[name]

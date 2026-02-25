@@ -95,7 +95,7 @@ def test_compiled_query_uses_multiline_and_label_clause() -> None:
 
     assert "\nwhere" not in formula
     assert "\n" in formula
-    assert "label sum(B) 'sales_sum'" in formula
+    assert "label sum(Col2) 'sales_sum'" in formula
 
 
 def test_orderby_alias_name_is_supported() -> None:
@@ -111,10 +111,10 @@ def test_orderby_alias_name_is_supported() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
-    assert "order by sum(B) desc" in formula
+    assert "order by sum(Col2) desc" in formula
 
 
-def test_orderby_a1_column_name_is_supported() -> None:
+def test_orderby_a1_column_name_is_rejected() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
@@ -126,8 +126,8 @@ def test_orderby_a1_column_name_is_supported() -> None:
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report_sales", expr)
-    assert "order by B desc" in formula
+    with pytest.raises(KeyError, match="Unknown order key"):
+        book.write_report("report_sales", expr)
 
 
 def test_orderby_unknown_column_raises_keyerror() -> None:
@@ -160,8 +160,8 @@ def test_compile_escapes_string_literal_and_alias_quotes() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
 
-    assert "where A = 'O''Reilly'" in formula
-    assert "label sum(B) 'sales_sum''s'" in formula
+    assert "where Col1 = 'O''Reilly'" in formula
+    assert "label sum(Col2) 'sales_sum''s'" in formula
 
 
 def test_compile_quotes_sheet_names_in_query_a1_range() -> None:
@@ -205,6 +205,20 @@ def test_limit_negative_raises_value_error() -> None:
         expr.limit(-1)
 
 
+def test_orderby_rejects_single_string_input() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    with pytest.raises(TypeError, match="expects a sequence"):
+        expr.orderby("Col2")
+
+
+def test_orderby_rejects_non_order_items() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    with pytest.raises(TypeError, match="item must be Order"):
+        expr.orderby(["country"])
+
+
 def test_orderby_asc_is_supported() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
@@ -213,7 +227,7 @@ def test_orderby_asc_is_supported() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
-    assert "order by A asc" in formula
+    assert "order by Col1 asc" in formula
 
 
 def test_select_omitted_defaults_to_star() -> None:
@@ -241,10 +255,10 @@ def test_select_empty_list_defaults_to_star() -> None:
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        (1, "where A = 1"),
-        (1.5, "where A = 1.5"),
-        (True, "where A = TRUE"),
-        (False, "where A = FALSE"),
+        (1, "where Col1 = 1"),
+        (1.5, "where Col1 = 1.5"),
+        (True, "where Col1 = TRUE"),
+        (False, "where Col1 = FALSE"),
     ],
 )
 def test_where_numeric_and_bool_literals_are_compiled(value: object, expected: str) -> None:
@@ -257,15 +271,16 @@ def test_where_numeric_and_bool_literals_are_compiled(value: object, expected: s
     assert expected in formula
 
 
-def test_orderby_coln_reference_is_supported() -> None:
+@pytest.mark.parametrize("name", ["Col2", "col2"])
+def test_orderby_coln_reference_is_rejected_with_policy_message(name: str) -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc("Col2")])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc(name)])
 
     book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report", expr)
-    assert "order by Col2 desc" in formula
+    with pytest.raises(KeyError, match="ColN style column references are not supported"):
+        book.write_report("report", expr)
 
 
 def test_orderby_prefers_alias_over_header_name() -> None:
@@ -280,7 +295,17 @@ def test_orderby_prefers_alias_over_header_name() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert "order by sum(B) desc" in formula
+    assert "order by sum(Col2) desc" in formula
+
+
+def test_select_coln_reference_is_rejected_with_policy_message() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["Col2"])
+    book = SheetBook("dummy", locale="en_US", api=api)
+
+    with pytest.raises(KeyError, match="ColN style column references are not supported"):
+        book.write_report("report", expr)
 
 
 def test_unknown_select_column_raises_keyerror_with_context() -> None:
@@ -304,11 +329,11 @@ def test_unknown_config_reference_raises_keyerror_with_context() -> None:
 def test_where_accepts_raw_query_string() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where("B > 100")
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where("Col2 > 100")
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert "where B > 100" in formula
+    assert "where Col2 > 100" in formula
 
 
 def test_select_supports_raw_expr_with_qcol_placeholders() -> None:
@@ -321,7 +346,7 @@ def test_select_supports_raw_expr_with_qcol_placeholders() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select A - B"' in formula
+    assert '"select Col1 - Col2"' in formula
 
 
 def test_where_raw_supports_qcol_placeholders() -> None:
@@ -333,7 +358,7 @@ def test_where_raw_supports_qcol_placeholders() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert "where B > 100 and A = 'JP'" in formula
+    assert "where Col2 > 100 and Col1 = 'JP'" in formula
 
 
 def test_where_raw_with_non_col_placeholder_raises_type_error() -> None:
@@ -348,7 +373,7 @@ def test_clause_order_is_independent_from_call_order() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select A\nwhere B > 100"' in formula
+    assert '"select Col1\nwhere Col2 > 100"' in formula
 
 
 def test_agg_accepts_qcol_argument() -> None:
@@ -358,4 +383,4 @@ def test_agg_accepts_qcol_argument() -> None:
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
-    assert '"select sum(A)"' in formula
+    assert '"select sum(Col1)"' in formula

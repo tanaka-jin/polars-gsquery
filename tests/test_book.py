@@ -19,12 +19,12 @@ def test_write_mart_stores_rows_and_header() -> None:
     assert api.read_header("data", "A:Z", 1) == ["a", "b"]
 
 
-def test_get_header_map_uses_a1_column_letters() -> None:
+def test_get_header_map_uses_coln_column_names() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["a", "b", "z", "aa"])
     book = SheetBook("dummy", api=api)
 
-    assert book.get_header_map("data", 1, "A:Z") == {"a": "A", "b": "B", "z": "C", "aa": "D"}
+    assert book.get_header_map("data", 1, "A:Z") == {"a": "Col1", "b": "Col2", "z": "Col3", "aa": "Col4"}
 
 
 def test_get_header_map_rejects_empty_header_name() -> None:

@@ -5,7 +5,7 @@ Google スプレッドシートの `=QUERY(...)` を、Polars ライクな DSL �
 ## できること
 
 - `q` DSL で `select / where / group by / order by / limit / label(alias)` を構築
-- スプレッドシートのヘッダ行から列名→A1 列記号（`A`, `B`, ...）を自動解決
+- スプレッドシートのヘッダ行から列名を解決し、内部的に QUERY 列記号（`Col1`, `Col2`, ...）へ変換
 - `Config` シートの値参照（`string / number / date / boolean`）を動的に QUERY に埋め込み
   - `string` は `SUBSTITUTE(..., "'", "''")` でクォートをエスケープ
   - `date` は `TEXT(..., "yyyy-MM-dd")` で `date 'YYYY-MM-DD'` 形式へ変換
@@ -76,6 +76,24 @@ print(formula)
 
 `Config` は重複 key、未知の type をエラーにします。
 
+## Breaking change (ColN policy)
+
+- Python DSL での列指定は **列名（header）または alias のみ** をサポートします。
+- `orderby` は `q.orderby([q.asc("price")])` のように `Order` の配列を受け取り、`q.orderby("Col2")` のような文字列直渡しはエラーです。
+- `Col1`, `Col2`, ... のような ColN 参照は **Python APIでは非サポート** です（エラーになります）。
+- ColN を使うのは、`q.raw()` で生の QUERY 文字列を書く場合のみです。
+
+```python
+# ❌ Not allowed
+q.from_sheet("data").orderby([q.desc("Col2")])
+
+# ✅ Allowed
+q.from_sheet("data").orderby([q.desc("price")])
+
+# QUERY式を書きたい場合のみ raw を使用
+q.from_sheet("data").where(q.raw("Col2 > 100"))
+```
+
 ## API 概要
 
 - `SheetBook.write_mart(df, sheet="data")`
@@ -93,9 +111,9 @@ print(formula)
 
 - 現在の集計関数は `sum`, `count` のみ
 - 条件は `and` 連結のみ（`or` は未対応）
-- `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"B > 100"`）も指定可能
+- `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"Col2 > 100"`）も指定可能（raw escape hatch）
 - 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能
-- `select(...)` でも `q.raw("{a} - {b}", a=q.col("A"), b=q.col("B"))` のような式列を指定可能（escape hatch）
+- `select(...)` でも `q.raw("{a} - {b}", a=q.col("price"), b=q.col("discount"))` のような式列を指定可能（escape hatch）
 - 集計引数も Polars ライクに `q.sum("sales")` / `q.sum(q.col("sales"))` を利用可能
 - `select(...)` を省略、または空で指定した場合は `select *` として扱います
 - `from_sheet(..., range_=...)` の `range_` を省略した場合、ヘッダ列数から `A:<最終列>` を自動推定します

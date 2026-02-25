@@ -91,7 +91,7 @@ class SheetBook:
                 raise ValueError(
                     f"Header contains duplicate column name: {name!r} at {sheet}!{_column_index_to_a1(i)}{header_row}"
                 )
-            header_map[name] = _column_index_to_a1(i)
+            header_map[name] = _column_index_to_query_col(i)
         return header_map
 
     def write_report(self, sheet: str, query_expr: QueryExpr, anchor_cell: str = "A1") -> str:
@@ -131,6 +131,12 @@ def _column_index_to_a1(index: int) -> str:
         n, rem = divmod(n - 1, 26)
         out.append(chr(ord("A") + rem))
     return "".join(reversed(out))
+
+
+def _column_index_to_query_col(index: int) -> str:
+    if index < 1:
+        raise ValueError("index must be >= 1")
+    return f"Col{index}"
 
 
 def _validate_rectangular_rows(rows: list[list[object]]) -> None:
