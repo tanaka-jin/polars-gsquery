@@ -202,13 +202,7 @@ def _config_ref_expr(cfg_ref: ConfigRef, delim: str) -> str:
 def _dynamic_predicate_expr(item: _DynamicPredicate, delim: str) -> str:
     blank_condition = _config_blank_condition_expr(item.cfg_ref, delim)
     predicate = f"{quote_formula_string(f'{item.left} {item.op} ')} & {_config_ref_expr(item.cfg_ref, delim)}"
-    return (
-        "IF(\n"
-        f"  {blank_condition}{delim}\n"
-        f"  {quote_formula_string('1=1')}{delim}\n"
-        f"  {predicate}\n"
-        ")"
-    )
+    return f"IF(\n  {blank_condition}{delim}\n  {quote_formula_string('1=1')}{delim}\n  {predicate}\n)"
 
 
 def _config_blank_condition_expr(cfg_ref: ConfigRef, delim: str) -> str:
