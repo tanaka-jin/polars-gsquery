@@ -19,11 +19,10 @@ class RawExpr:
 class Agg:
     func: str
     column: str | Column
-    distinct: bool = False
     alias_name: str | None = None
 
     def alias(self, name: str) -> "Agg":
-        return Agg(func=self.func, column=self.column, distinct=self.distinct, alias_name=name)
+        return Agg(func=self.func, column=self.column, alias_name=name)
 
 
 @dataclass(frozen=True)
