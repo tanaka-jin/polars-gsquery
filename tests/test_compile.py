@@ -257,15 +257,16 @@ def test_where_numeric_and_bool_literals_are_compiled(value: object, expected: s
     assert expected in formula
 
 
-def test_orderby_coln_reference_is_supported() -> None:
+@pytest.mark.parametrize("name", ["Col2", "col2"])
+def test_orderby_coln_reference_is_rejected_with_policy_message(name: str) -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc("Col2")])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).orderby([q.desc(name)])
 
     book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report", expr)
-    assert "order by Col2 desc" in formula
+    with pytest.raises(KeyError, match="ColN style column references are not supported"):
+        book.write_report("report", expr)
 
 
 def test_orderby_prefers_alias_over_header_name() -> None:
@@ -281,6 +282,16 @@ def test_orderby_prefers_alias_over_header_name() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
     assert "order by sum(Col2) desc" in formula
+
+
+def test_select_coln_reference_is_rejected_with_policy_message() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["Col2"])
+    book = SheetBook("dummy", locale="en_US", api=api)
+
+    with pytest.raises(KeyError, match="ColN style column references are not supported"):
+        book.write_report("report", expr)
 
 
 def test_unknown_select_column_raises_keyerror_with_context() -> None:
