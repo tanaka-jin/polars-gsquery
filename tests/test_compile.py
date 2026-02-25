@@ -205,6 +205,20 @@ def test_limit_negative_raises_value_error() -> None:
         expr.limit(-1)
 
 
+def test_orderby_rejects_single_string_input() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    with pytest.raises(TypeError, match="expects a sequence"):
+        expr.orderby("Col2")
+
+
+def test_orderby_rejects_non_order_items() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+
+    with pytest.raises(TypeError, match="item must be Order"):
+        expr.orderby(["country"])
+
+
 def test_orderby_asc_is_supported() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
