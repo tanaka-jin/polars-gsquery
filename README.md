@@ -58,7 +58,7 @@ expr = (
     .where(q.col("country") == q.cfg("country"))
     .where(q.col("event_date") >= q.cfg("start_date", type_name="date"))
     .group_by(["country"])
-    .sort([q.desc("sales_sum")])
+    .sort("sales_sum", descending=True)
     .limit(50)
 )
 
@@ -79,16 +79,16 @@ print(formula)
 ## Breaking change (ColN policy)
 
 - Python DSL での列指定は **列名（header）または alias のみ** をサポートします。
-- `sort` は `q.sort([q.asc("price")])` のように `Order` の配列を受け取り、`q.sort("Col2")` のような文字列直渡しはエラーです。
+- `sort` は Polars ライクに `expr.sort("price")` / `expr.sort("price", descending=True)` をサポートします。複数キーは `expr.sort(["country", "price"], descending=[False, True])` のように指定できます。
 - `Col1`, `Col2`, ... のような ColN 参照は **Python APIでは非サポート** です（エラーになります）。
 - ColN を使うのは、`q.raw()` で生の QUERY 文字列を書く場合のみです。
 
 ```python
 # ❌ Not allowed
-q.from_sheet("data").sort([q.desc("Col2")])
+q.from_sheet("data").sort("Col2", descending=True)
 
 # ✅ Allowed
-q.from_sheet("data").sort([q.desc("price")])
+q.from_sheet("data").sort("price", descending=True)
 
 # QUERY式を書きたい場合のみ raw を使用
 q.from_sheet("data").where(q.raw("Col2 > 100"))

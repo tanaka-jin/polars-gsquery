@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from polars_gsquery.config import ConfigRef
 
-from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
+from .ast import Agg, Column, Predicate, QueryExpr, RawExpr
 
 
 @dataclass(frozen=True)
@@ -71,12 +71,6 @@ class QueryNamespace:
                 raise TypeError(f"raw() placeholder must be q.col(...): {alias}={col_expr!r}")
             named_columns.append((alias, col_expr.col))
         return RawExpr(query=query, named_columns=tuple(named_columns))
-
-    def desc(self, name: str) -> Order:
-        return Order(name=name, descending=True)
-
-    def asc(self, name: str) -> Order:
-        return Order(name=name, descending=False)
 
 
 q = QueryNamespace()
