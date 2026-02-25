@@ -98,8 +98,6 @@ def _compile_select(
 
 
 def _compile_agg_target(item: Agg, col: str) -> str:
-    if item.distinct:
-        return f"{item.func}(distinct {col})"
     return f"{item.func}({col})"
 
 

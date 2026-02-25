@@ -107,7 +107,7 @@ expr = (
         q.avg("sales").alias("sales_avg"),
         q.min("sales"),
         q.max("sales"),
-        q.count_distinct("user_id").alias("users"),
+        q.count("user_id").alias("users"),
     ])
     .where((q.col("country") == "JP") | (q.col("country") == "US"))
     .groupby(["country"])
@@ -135,7 +135,7 @@ expr = q.from_sheet("data").where(
 
 ## 制約
 
-- 対応集計関数: `sum`, `count`, `avg`, `min`, `max`, `count_distinct`（`count(distinct ColN)` を生成）
+- 対応集計関数: `sum`, `count`, `avg`, `min`, `max`
 - 条件は `where(cond1, cond2, ...)` の暗黙 `and` に加えて、`|`（OR）と `&`（AND）の式をサポート
 - `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"Col2 > 100"`）も指定可能（raw escape hatch）
 - 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能

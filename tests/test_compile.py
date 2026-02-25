@@ -487,47 +487,6 @@ def test_select_supports_multiple_aggregations_in_single_select() -> None:
     assert '"select sum(Col1), count(Col1), avg(Col1), min(Col1), max(Col1)"' in formula
 
 
-def test_select_supports_count_distinct_single_column() -> None:
-    api = SheetsAPI()
-    api.set_header_fixture("data", "A:Z", 1, ["user_id"])
-
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select([q.count_distinct("user_id")])
-
-    book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report", expr)
-    assert '"select count(distinct Col1)"' in formula
-
-
-def test_select_supports_count_distinct_with_groupby() -> None:
-    api = SheetsAPI()
-    api.set_header_fixture("data", "A:Z", 1, ["country", "user_id"])
-
-    expr = (
-        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
-        .select(["country", q.count_distinct("user_id")])
-        .groupby(["country"])
-    )
-
-    book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report", expr)
-    assert '"select Col1, count(distinct Col2)\ngroup by Col1"' in formula
-
-
-def test_select_supports_count_distinct_with_other_aggregations() -> None:
-    api = SheetsAPI()
-    api.set_header_fixture("data", "A:Z", 1, ["country", "user_id", "sales"])
-
-    expr = (
-        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
-        .select(["country", q.count_distinct("user_id"), q.sum("sales")])
-        .groupby(["country"])
-    )
-
-    book = SheetBook("dummy", locale="en_US", api=api)
-    formula = book.write_report("report", expr)
-    assert '"select Col1, count(distinct Col2), sum(Col3)\ngroup by Col1"' in formula
-
-
 def test_where_supports_boolean_or_expression() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country"])
