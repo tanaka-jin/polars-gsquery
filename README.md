@@ -94,6 +94,32 @@ q.from_sheet("data").orderby([q.desc("price")])
 q.from_sheet("data").where(q.raw("Col2 > 100"))
 ```
 
+
+
+## 集計関数 / ブール式の例
+
+```python
+expr = (
+    q.from_sheet("data")
+    .select([
+        "country",
+        q.sum("sales").alias("sales_sum"),
+        q.avg("sales").alias("sales_avg"),
+        q.min("sales"),
+        q.max("sales"),
+        q.count_distinct("user_id").alias("users"),
+    ])
+    .where((q.col("country") == "JP") | (q.col("country") == "US"))
+    .groupby(["country"])
+)
+```
+
+```python
+expr = q.from_sheet("data").where(
+    ((q.col("a") == 1) | (q.col("b") == 2)) & (q.col("c") == 3)
+)
+```
+
 ## API 概要
 
 - `SheetBook.write_mart(df, sheet="data")`
@@ -109,8 +135,8 @@ q.from_sheet("data").where(q.raw("Col2 > 100"))
 
 ## 制約
 
-- 現在の集計関数は `sum`, `count` のみ
-- 条件は `and` 連結のみ（`or` は未対応）
+- 対応集計関数: `sum`, `count`, `avg`, `min`, `max`, `count_distinct`（`count(distinct ColN)` を生成）
+- 条件は `where(cond1, cond2, ...)` の暗黙 `and` に加えて、`|`（OR）と `&`（AND）の式をサポート
 - `where` は `q.col("...") <op> 値` に加えて、生文字列（例: `"Col2 > 100"`）も指定可能（raw escape hatch）
 - 生文字列で列参照だけ `q.col` を使いたい場合は `q.raw("{sales} > 100", sales=q.col("sales"))` のようにプレースホルダ置換が可能
 - `select(...)` でも `q.raw("{a} - {b}", a=q.col("price"), b=q.col("discount"))` のような式列を指定可能（escape hatch）
