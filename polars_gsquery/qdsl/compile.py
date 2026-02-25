@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from polars_gsquery.config import ConfigRef
-from polars_gsquery.sheets.a1 import quote_sheet_name
+from polars_gsquery.sheets.a1 import column_index_to_a1, quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
 from .ast import Agg, BooleanExpr, Column, Predicate, QueryExpr, RawExpr
@@ -190,19 +190,7 @@ def _resolve_range(expr: QueryExpr, header_map: dict[str, str]) -> str:
         return expr.range_
     if not header_map:
         raise ValueError("Cannot infer range from empty header")
-    return f"A:{_a1_col_from_count(len(header_map))}"
-
-
-def _a1_col_from_count(count: int) -> str:
-    if count < 1:
-        raise ValueError("count must be >= 1")
-
-    out: list[str] = []
-    n = count
-    while n > 0:
-        n, rem = divmod(n - 1, 26)
-        out.append(chr(ord("A") + rem))
-    return "".join(reversed(out))
+    return f"A:{column_index_to_a1(len(header_map))}"
 
 
 def _quote_query_string(value: str) -> str:
