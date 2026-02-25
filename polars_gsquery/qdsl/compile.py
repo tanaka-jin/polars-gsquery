@@ -8,7 +8,7 @@ from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
-from .ast import Agg, Column, Order, Predicate, QueryExpr, RawExpr
+from .ast import Agg, BooleanExpr, Column, Order, Predicate, QueryExpr, RawExpr
 
 COLN_API_ERROR = (
     "ColN style column references are not supported in the Python API. "
@@ -78,7 +78,7 @@ def _compile_select(
             compiled.append(_render_raw_expr(item, header_map))
         elif isinstance(item, Agg):
             col = _resolve_agg_column(item.column, header_map)
-            target = f"{item.func}({col})"
+            target = _compile_agg_target(item, col)
             piece = target
             if item.alias_name:
                 labels.append((target, item.alias_name))
@@ -89,6 +89,12 @@ def _compile_select(
     return ", ".join(compiled)
 
 
+def _compile_agg_target(item: Agg, col: str) -> str:
+    if item.distinct:
+        return f"{item.func}(distinct {col})"
+    return f"{item.func}({col})"
+
+
 def _resolve_agg_column(column: str | Column, header_map: dict[str, str]) -> str:
     if isinstance(column, Column):
         return _resolve_col(column.name, header_map)
@@ -96,10 +102,14 @@ def _resolve_agg_column(column: str | Column, header_map: dict[str, str]) -> str
 
 
 def _compile_predicate(
-    pred: Predicate | RawExpr, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
+    pred: Predicate | BooleanExpr | RawExpr, header_map: dict[str, str], dynamic: list[tuple[str, ConfigRef]]
 ) -> str:
     if isinstance(pred, RawExpr):
         return _render_raw_expr(pred, header_map)
+    if isinstance(pred, BooleanExpr):
+        left = _compile_predicate(pred.left, header_map, dynamic)
+        right = _compile_predicate(pred.right, header_map, dynamic)
+        return f"({left} {pred.op} {right})"
 
     left = _resolve_col(pred.left.name, header_map)
     right = pred.right

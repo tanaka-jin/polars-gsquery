@@ -384,3 +384,201 @@ def test_agg_accepts_qcol_argument() -> None:
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report", expr)
     assert '"select sum(Col1)"' in formula
+
+
+def test_select_supports_avg_without_groupby() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["price"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select([q.avg("price")])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select avg(Col1)"' in formula
+
+
+def test_select_supports_avg_with_groupby() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "price"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .select(["country", q.avg("price")])
+        .groupby(["country"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select Col1, avg(Col2)\ngroup by Col1"' in formula
+
+
+def test_select_supports_min_max_with_groupby() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "price"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .select(["country", q.min("price"), q.max("price")])
+        .groupby(["country"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select Col1, min(Col2), max(Col2)\ngroup by Col1"' in formula
+
+
+def test_select_supports_new_aggs_with_alias_and_label() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["price"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(
+        [q.avg("price").alias("avg_price"), q.min("price").alias("min_price"), q.max("price").alias("max_price")]
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "label avg(Col1) 'avg_price', min(Col1) 'min_price', max(Col1) 'max_price'" in formula
+
+
+def test_select_supports_multiple_aggregations_in_single_select() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["price"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(
+        [q.sum("price"), q.count("price"), q.avg("price"), q.min("price"), q.max("price")]
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select sum(Col1), count(Col1), avg(Col1), min(Col1), max(Col1)"' in formula
+
+
+def test_select_supports_count_distinct_single_column() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["user_id"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select([q.count_distinct("user_id")])
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select count(distinct Col1)"' in formula
+
+
+def test_select_supports_count_distinct_with_groupby() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "user_id"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .select(["country", q.count_distinct("user_id")])
+        .groupby(["country"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select Col1, count(distinct Col2)\ngroup by Col1"' in formula
+
+
+def test_select_supports_count_distinct_with_other_aggregations() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "user_id", "sales"])
+
+    expr = (
+        q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
+        .select(["country", q.count_distinct("user_id"), q.sum("sales")])
+        .groupby(["country"])
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert '"select Col1, count(distinct Col2), sum(Col3)\ngroup by Col1"' in formula
+
+
+def test_where_supports_boolean_or_expression() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        (q.col("country") == "JP") | (q.col("country") == "US")
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where (Col1 = 'JP' or Col1 = 'US')" in formula
+
+
+def test_where_supports_boolean_and_expression_operator() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where((q.col("a") == 1) & (q.col("b") == 2))
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where (Col1 = 1 and Col2 = 2)" in formula
+
+
+def test_where_supports_mixed_and_or_with_explicit_parentheses() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b", "c"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        ((q.col("a") == 1) | (q.col("b") == 2)) & (q.col("c") == 3)
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where ((Col1 = 1 or Col2 = 2) and Col3 = 3)" in formula
+
+
+def test_where_supports_nested_boolean_grouping_variants() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b", "c"])
+
+    expr1 = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        ((q.col("a") == 1) | (q.col("b") == 2)) & (q.col("c") == 3)
+    )
+    expr2 = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        (q.col("a") == 1) & ((q.col("b") == 2) | (q.col("c") == 3))
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula1 = book.write_report("report1", expr1)
+    formula2 = book.write_report("report2", expr2)
+    assert "where ((Col1 = 1 or Col2 = 2) and Col3 = 3)" in formula1
+    assert "where (Col1 = 1 and (Col2 = 2 or Col3 = 3))" in formula2
+
+
+def test_where_supports_boolean_expression_with_string_comparison() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["country", "status"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(
+        (q.col("country") == "JP") & (q.col("status") != "inactive")
+    )
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where (Col1 = 'JP' and Col2 != 'inactive')" in formula
+
+
+def test_where_supports_boolean_expression_with_numeric_comparison() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where((q.col("a") > 10) | (q.col("b") <= 20))
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where (Col1 > 10 or Col2 <= 20)" in formula
+
+
+def test_where_multiple_arguments_keep_implicit_and_behavior() -> None:
+    api = SheetsAPI()
+    api.set_header_fixture("data", "A:Z", 1, ["a", "b"])
+
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").where(q.col("a") == 1, q.col("b") == 2)
+
+    book = SheetBook("dummy", locale="en_US", api=api)
+    formula = book.write_report("report", expr)
+    assert "where Col1 = 1 and Col2 = 2" in formula
