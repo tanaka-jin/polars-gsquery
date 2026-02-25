@@ -8,7 +8,7 @@ from polars_gsquery.config import ConfigRef
 from polars_gsquery.sheets.a1 import quote_sheet_name
 from polars_gsquery.sheets.locale import function_arg_delimiter, quote_formula_string
 
-from .ast import Agg, BooleanExpr, Column, Order, Predicate, QueryExpr, RawExpr
+from .ast import Agg, BooleanExpr, Column, Predicate, QueryExpr, RawExpr
 
 COLN_API_ERROR = (
     "ColN style column references are not supported in the Python API. "
@@ -130,11 +130,11 @@ def _compile_predicate(
     return f"{left} {pred.op} {right}"
 
 
-def _compile_order(orders: Sequence[Order], header_map: dict[str, str], aliases: dict[str, str]) -> str:
+def _compile_order(orders: Sequence[tuple[str, bool]], header_map: dict[str, str], aliases: dict[str, str]) -> str:
     out: list[str] = []
-    for item in orders:
-        col = _resolve_order_target(item.name, header_map, aliases)
-        out.append(col + (" desc" if item.descending else " asc"))
+    for name, descending in orders:
+        col = _resolve_order_target(name, header_map, aliases)
+        out.append(col + (" desc" if descending else " asc"))
     return ", ".join(out)
 
 

@@ -22,7 +22,7 @@ def test_compile_formula_with_config_refs_ja_locale() -> None:
         .where(q.col("country") == cfg.ref("country"))
         .where(q.col("event_date") >= cfg.ref("start_date"))
         .group_by(["country"])
-        .sort([q.desc("sales_sum")])
+        .sort("sales_sum", descending=True)
         .limit(50)
     )
 
@@ -140,7 +140,7 @@ def test_sort_alias_name_is_supported() -> None:
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
         .group_by(["country"])
-        .sort([q.desc("sales_sum")])
+        .sort("sales_sum", descending=True)
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -156,7 +156,7 @@ def test_sort_a1_column_name_is_rejected() -> None:
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
         .group_by(["country"])
-        .sort([q.desc("B")])
+        .sort("B", descending=True)
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -172,7 +172,7 @@ def test_sort_unknown_column_raises_keyerror() -> None:
         q.from_sheet(data_sheet="data", config_sheet="config", header_rows=1, range_="A:Z")
         .select(["country", q.sum("sales").alias("sales_sum")])
         .group_by(["country"])
-        .sort([q.desc("not_exists")])
+        .sort("not_exists", descending=True)
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
@@ -239,18 +239,17 @@ def test_limit_negative_raises_value_error() -> None:
         expr.limit(-1)
 
 
-def test_sort_rejects_single_string_input() -> None:
+def test_sort_accepts_single_string_input() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").sort("country")
+
+    assert expr.order == (("country", False),)
+
+
+def test_sort_rejects_non_str_items() -> None:
     expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
 
-    with pytest.raises(TypeError, match="expects a sequence"):
-        expr.sort("Col2")
-
-
-def test_sort_rejects_non_order_items() -> None:
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
-
-    with pytest.raises(TypeError, match="item must be Order"):
-        expr.sort(["country"])
+    with pytest.raises(TypeError, match="item must be str"):
+        expr.sort([123])
 
 
 def test_old_method_names_are_removed() -> None:
@@ -264,11 +263,18 @@ def test_sort_asc_is_supported() -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort([q.asc("country")])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort("country")
 
     book = SheetBook("dummy", locale="en_US", api=api)
     formula = book.write_report("report_sales", expr)
     assert "order by Col1 asc" in formula
+
+
+def test_select_and_group_by_accept_single_string() -> None:
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select("country").group_by("country")
+
+    assert expr.selected == ("country",)
+    assert expr.group_keys == ("country",)
 
 
 def test_select_omitted_defaults_to_star() -> None:
@@ -317,7 +323,7 @@ def test_sort_coln_reference_is_rejected_with_policy_message(name: str) -> None:
     api = SheetsAPI()
     api.set_header_fixture("data", "A:Z", 1, ["country", "sales"])
 
-    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort([q.desc(name)])
+    expr = q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z").select(["country"]).sort(name, descending=True)
 
     book = SheetBook("dummy", locale="en_US", api=api)
     with pytest.raises(KeyError, match="ColN style column references are not supported"):
@@ -331,7 +337,7 @@ def test_sort_prefers_alias_over_header_name() -> None:
     expr = (
         q.from_sheet(data_sheet="data", header_rows=1, range_="A:Z")
         .select(["sales_sum", q.sum("sales").alias("sales_sum")])
-        .sort([q.desc("sales_sum")])
+        .sort("sales_sum", descending=True)
     )
 
     book = SheetBook("dummy", locale="en_US", api=api)
